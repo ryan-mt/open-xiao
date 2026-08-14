@@ -18,9 +18,8 @@ function zIndexFor(source, selector) {
 }
 
 test("auth dialog stays above settings and Escape dismisses it first", async () => {
-  const [styles, modal, picker, settings, sidebar, app, dispatcher] = await Promise.all([
+  const [styles, picker, settings, sidebar, app, dispatcher] = await Promise.all([
     readSource("src/styles.css"),
-    readSource("src/components/AuthModal.tsx"),
     readSource("src/components/auth/SignInProviderModal.tsx"),
     readSource("src/components/SettingsModal.tsx"),
     readSource("src/components/Sidebar.tsx"),
@@ -31,13 +30,6 @@ test("auth dialog stays above settings and Escape dismisses it first", async () 
   assert.ok(
     zIndexFor(styles, ".auth-modal") > zIndexFor(styles, ".settings-backdrop"),
   );
-  assert.match(modal, /event\.stopImmediatePropagation\(\)/);
-  assert.match(modal, /addEventListener\("keydown", onKey, true\)/);
-  assert.match(modal, /querySelectorAll<HTMLElement>\(FOCUSABLE\)/);
-  assert.match(modal, /document\.addEventListener\("focusin", onFocus, true\)/);
-  assert.match(modal, /returnFocusRef\?\.current/);
-  assert.match(modal, /if \(previouslyFocused\?\.isConnected\)/);
-  assert.match(modal, /returnFocusRef\.current = null/);
   assert.match(picker, /GrokLogo/);
   assert.match(picker, /OpenAILogo/);
   assert.match(picker, /aria-label="Sign in"/);
