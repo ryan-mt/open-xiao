@@ -378,6 +378,34 @@ impl TerminalManager {
         Ok(())
     }
 
+    pub(crate) fn stop_workspace(&self, workspace_key: &str) -> Result<(), String> {
+        let sessions = {
+            let mut entries = self.sessions.entries.lock().map_err(|e| e.to_string())?;
+            let session_ids = entries
+                .iter()
+                .filter(|(_, session)| crate::paths::path_key(&session.cwd) == workspace_key)
+                .map(|(session_id, _)| session_id.clone())
+                .collect::<Vec<_>>();
+            session_ids
+                .into_iter()
+                .filter_map(|session_id| entries.remove(&session_id))
+                .collect::<Vec<_>>()
+        };
+
+        let mut first_error = None;
+        for session in sessions {
+            let result = (|| {
+                let master = session.master.lock().map_err(|e| e.to_string())?;
+                let mut killer = session.killer.lock().map_err(|e| e.to_string())?;
+                kill_terminal(&mut killer, master.as_ref())
+            })();
+            if first_error.is_none() {
+                first_error = result.err();
+            }
+        }
+        first_error.map_or(Ok(()), Err)
+    }
+
     fn session(&self, session_id: &str) -> Result<Arc<TerminalSession>, String> {
         self.sessions
             .entries

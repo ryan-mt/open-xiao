@@ -527,6 +527,8 @@ pub fn unregister_dir(app: &AppHandle, path: &str) -> Result<(), String> {
         }
         s
     };
+    app.state::<crate::terminal::TerminalManager>()
+        .stop_workspace(&key)?;
     let _guard = lock_registry()?;
     let mut reg = load_registry(app)?;
     let before = reg.roots.len();
