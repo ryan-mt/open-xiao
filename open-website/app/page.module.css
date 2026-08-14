@@ -1,0 +1,24 @@
+.page {
+  min-height: 100dvh;
+  overflow: clip;
+  background: var(--background);
+}
+
+.skipLink {
+  position: fixed;
+  top: 12px;
+  left: 12px;
+  z-index: 30;
+  padding: 11px 16px;
+  border-radius: var(--radius);
+  color: var(--accent-contrast);
+  background: var(--accent);
+  transform: translateY(-150%);
+  font-size: 0.84rem;
+  font-weight: 680;
+  transition: transform 180ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.skipLink:focus {
+  transform: translateY(0);
+}

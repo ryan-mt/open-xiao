@@ -1,0 +1,77 @@
+.controlSection {
+  --section-heading-width: 10ch;
+}
+
+.controlHeading {
+  max-width: 65rem;
+}
+
+.controlHeading > p {
+  max-width: 35rem;
+  margin-top: 28px;
+  color: var(--muted);
+  font-size: clamp(1.03rem, 1.5vw, 1.18rem);
+  line-height: 1.58;
+}
+
+.controlBody {
+  display: grid;
+  grid-template-columns: minmax(250px, 0.42fr) minmax(0, 1.58fr);
+  align-items: center;
+  gap: clamp(48px, 8vw, 118px);
+  margin-top: clamp(72px, 9vw, 120px);
+}
+
+.controlNotes {
+  display: grid;
+  gap: 54px;
+}
+
+.controlNotes article {
+  padding-left: 22px;
+  border-left: 4px solid var(--accent);
+}
+
+.controlNotes h3 {
+  font-size: 1.12rem;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+}
+
+.controlNotes p {
+  margin-top: 10px;
+  color: var(--muted);
+  font-size: 0.92rem;
+  line-height: 1.58;
+}
+
+.settingsFrame {
+  background: #d7d8d4;
+}
+
+.settingsFrame img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+@media (max-width: 860px) {
+  .controlBody {
+    grid-template-columns: 1fr;
+  }
+
+  .settingsFrame {
+    order: -1;
+  }
+
+  .controlNotes {
+    grid-template-columns: 1fr 1fr;
+    gap: 30px;
+  }
+}
+
+@media (max-width: 620px) {
+  .controlNotes {
+    grid-template-columns: 1fr;
+  }
+}

@@ -1,0 +1,18 @@
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 11px;
+  width: fit-content;
+  font-size: 0.9rem;
+  font-weight: 520;
+  letter-spacing: -0.025em;
+}
+
+.brand img {
+  display: block;
+  border-radius: 50%;
+}
+
+.brand strong {
+  font-weight: 760;
+}

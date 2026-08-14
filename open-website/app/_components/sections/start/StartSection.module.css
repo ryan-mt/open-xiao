@@ -1,0 +1,80 @@
+.startSection {
+  --section-heading-width: 9ch;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(360px, 0.72fr);
+  align-items: center;
+  gap: clamp(54px, 9vw, 132px);
+  margin-bottom: clamp(72px, 9vw, 120px);
+  padding: clamp(48px, 7vw, 92px);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-muted);
+}
+
+.startCopy > p {
+  max-width: 34rem;
+  margin-top: 26px;
+  color: var(--muted);
+  font-size: 1rem;
+  line-height: 1.58;
+}
+
+.startCopy ul {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0 28px;
+  margin-top: 34px;
+  list-style: none;
+}
+
+.startCopy li {
+  padding: 13px 0;
+  border-top: 1px solid var(--border-strong);
+  color: var(--muted);
+  font-family: var(--font-ibm-plex-mono), monospace;
+  font-size: 0.7rem;
+}
+
+.codePanel {
+  overflow: hidden;
+  border-radius: var(--radius);
+  color: #edf0e7;
+  background: #10120f;
+  box-shadow: var(--shadow);
+}
+
+.codeLabel {
+  padding: 18px 22px;
+  border-bottom: 1px solid rgb(237 240 231 / 0.16);
+  color: var(--accent);
+  font-family: var(--font-ibm-plex-mono), monospace;
+  font-size: 0.7rem;
+  font-weight: 600;
+}
+
+.codePanel pre {
+  overflow-x: auto;
+  padding: clamp(30px, 5vw, 58px) 24px;
+}
+
+.codePanel code {
+  font-family: var(--font-ibm-plex-mono), monospace;
+  font-size: clamp(1rem, 1.8vw, 1.3rem);
+  line-height: 1.8;
+}
+
+@media (max-width: 860px) {
+  .startSection {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 620px) {
+  .startSection {
+    padding: 28px;
+  }
+
+  .startCopy ul {
+    grid-template-columns: 1fr;
+  }
+}

@@ -1,0 +1,49 @@
+.footer {
+  width: var(--shell);
+  min-height: 124px;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 28px;
+  margin-inline: auto;
+  border-top: 1px solid var(--border-strong);
+}
+
+.footer > p {
+  color: var(--subtle);
+  font-family: var(--font-ibm-plex-mono), monospace;
+  font-size: 0.67rem;
+}
+
+.footer nav {
+  justify-self: end;
+  display: inline-flex;
+  align-items: center;
+  gap: 24px;
+}
+
+.footer nav a {
+  color: var(--muted);
+  font-size: 0.73rem;
+  font-weight: 620;
+  transition: color 160ms ease;
+}
+
+.footer nav a:hover {
+  color: var(--foreground);
+}
+
+@media (max-width: 760px) {
+  .footer {
+    grid-template-columns: 1fr;
+    justify-items: start;
+    gap: 20px;
+    padding: 38px 0;
+  }
+
+  .footer nav {
+    justify-self: start;
+    flex-wrap: wrap;
+    gap: 16px 22px;
+  }
+}

@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/png" href="/grok-favicon.png" />
+    <link rel="apple-touch-icon" href="/grok-apple.png" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&display=swap"
+      rel="stylesheet"
+    />
+    <title>Open Xiao</title>
+    <script>
+      try {
+        var t = localStorage.getItem("grok-theme-v1");
+        var darkThemes = [
+          "dark",
+          "inkstone",
+          "ember-ledger",
+          "night-orchard",
+          "oxide-terminal",
+          "blue-hour",
+          "cinder-bloom",
+          "deep-sea-silt",
+          "sodium-vapor",
+          "aster-static",
+          "bog-copper",
+          "petrol-bloom",
+          "redshift-mono",
+          "phosphor-dust",
+        ];
+        var lightThemes = [
+          "light",
+          "mineral-paper",
+          "salt-lake",
+          "moss-negative",
+          "lichen-field",
+          "clay-negative",
+          "glacier-algae",
+          "chalk-plum",
+          "brine-lilac",
+        ];
+        var knownThemes = ["system"].concat(lightThemes, darkThemes);
+        if (knownThemes.indexOf(t) === -1) t = "system";
+        var dark =
+          darkThemes.indexOf(t) !== -1 ||
+          (t === "system" &&
+            window.matchMedia("(prefers-color-scheme: dark)").matches);
+        var applied = t === "system" ? (dark ? "dark" : "light") : t;
+        var backgrounds = {
+          light: "#fafafa",
+          dark: "#0a0a0a",
+          "mineral-paper": "#edf1f2",
+          inkstone: "#0e1413",
+          "ember-ledger": "#171311",
+          "night-orchard": "#0f150f",
+          "salt-lake": "#eef3f1",
+          "moss-negative": "#e8ebd9",
+          "oxide-terminal": "#151918",
+          "blue-hour": "#101522",
+          "cinder-bloom": "#191318",
+          "lichen-field": "#ebede5",
+          "deep-sea-silt": "#091718",
+          "clay-negative": "#ece9e5",
+          "sodium-vapor": "#171612",
+          "aster-static": "#16151c",
+          "bog-copper": "#111714",
+          "glacier-algae": "#e7eff0",
+          "petrol-bloom": "#0d171c",
+          "chalk-plum": "#eee9ed",
+          "redshift-mono": "#161415",
+          "brine-lilac": "#e9eaec",
+          "phosphor-dust": "#151610",
+        };
+        if (dark) document.documentElement.classList.add("dark");
+        document.documentElement.dataset.theme = applied;
+        document.documentElement.style.colorScheme = dark ? "dark" : "light";
+        document.documentElement.style.background = backgrounds[applied];
+      } catch (e) {}
+    </script>
+  </head>
+
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

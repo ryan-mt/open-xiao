@@ -1,0 +1,62 @@
+.factRail {
+  color: var(--accent-contrast);
+  background: var(--accent);
+}
+
+.factInner {
+  width: var(--shell);
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(340px, 0.85fr);
+  align-items: start;
+  gap: clamp(64px, 10vw, 150px);
+  margin-inline: auto;
+  padding: clamp(72px, 9vw, 122px) 0;
+}
+
+.factRail h2 {
+  max-width: 14ch;
+  font-size: clamp(2.8rem, 5vw, 5.4rem);
+  font-weight: 720;
+  line-height: 0.96;
+  letter-spacing: -0.06em;
+  text-wrap: balance;
+}
+
+.facts {
+  display: grid;
+}
+
+.facts article {
+  display: grid;
+  grid-template-columns: minmax(130px, 0.68fr) minmax(0, 1.32fr);
+  gap: 28px;
+  padding: 24px 0;
+}
+
+.facts article + article {
+  border-top: 1px solid rgb(17 20 10 / 0.28);
+}
+
+.facts strong {
+  font-size: 0.84rem;
+  font-weight: 760;
+}
+
+.facts p {
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+@media (max-width: 860px) {
+  .factInner {
+    grid-template-columns: 1fr;
+    gap: 52px;
+  }
+}
+
+@media (max-width: 520px) {
+  .facts article {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+}

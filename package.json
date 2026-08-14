@@ -1,0 +1,45 @@
+{
+  "name": "open-xiao",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Open Xiao desktop agent client",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "test": "npm run test:app && cargo test --manifest-path src-tauri/Cargo.toml",
+    "test:app": "node --experimental-strip-types --test scripts/tests/*.test.mjs",
+    "typecheck": "tsc --noEmit",
+    "build": "tsc && vite build",
+    "build:beta": "tsc && vite build --mode beta",
+    "verify:release": "npm run test:app && npm run typecheck && npm run build && cargo test --locked --manifest-path src-tauri/Cargo.toml && cargo clippy --locked --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings && cargo fmt --manifest-path src-tauri/Cargo.toml --all -- --check",
+    "preview": "vite preview",
+    "tauri": "tauri",
+    "app": "node scripts/run-app.mjs",
+    "icons": "python scripts/generate-app-icons.py"
+  },
+  "dependencies": {
+    "@tauri-apps/api": "^2",
+    "@tauri-apps/plugin-dialog": "^2.7.2",
+    "@tauri-apps/plugin-notification": "^2.3.3",
+    "@tauri-apps/plugin-opener": "^2",
+    "@xterm/addon-fit": "^0.11.0",
+    "@xterm/addon-webgl": "^0.19.0",
+    "@xterm/xterm": "^6.0.0",
+    "highlight.js": "^11.11.1",
+    "lucide-react": "^0.564.0",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "react-markdown": "^10.1.0",
+    "rehype-raw": "^7.0.0",
+    "rehype-sanitize": "^6.0.0",
+    "remark-gfm": "^4.0.1"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2",
+    "@types/react": "^19.1.8",
+    "@types/react-dom": "^19.1.6",
+    "@vitejs/plugin-react": "^4.6.0",
+    "typescript": "~5.8.3",
+    "vite": "^7.0.4"
+  }
+}

@@ -1,0 +1,45 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Capability for the trusted main webview",
+  "webviews": [
+    "main"
+  ],
+  "permissions": [
+    "core:default",
+    "core:event:default",
+    "core:window:allow-set-theme",
+    "core:window:allow-set-background-color",
+    "core:window:allow-destroy",
+    "core:window:allow-close",
+    "core:window:allow-set-focus",
+    "core:window:allow-unminimize",
+    "core:window:allow-show",
+    "core:webview:allow-set-webview-zoom",
+    "dialog:allow-open",
+    {
+      "identifier": "opener:allow-open-url",
+      "allow": [
+        {
+          "url": "https://auth.x.ai/*"
+        },
+        {
+          "url": "https://*.x.ai/*"
+        },
+        {
+          "url": "https://openai.com/*"
+        },
+        {
+          "url": "https://*.openai.com/*"
+        },
+        {
+          "url": "https://chatgpt.com/*"
+        },
+        {
+          "url": "https://*.chatgpt.com/*"
+        }
+      ]
+    },
+    "notification:default"
+  ]
+}

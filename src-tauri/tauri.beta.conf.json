@@ -1,0 +1,34 @@
+{
+  "productName": "Open Xiao (Beta)",
+  "identifier": "com.nguye.openxiao.beta",
+  "build": {
+    "beforeDevCommand": null,
+    "devUrl": null,
+    "beforeBuildCommand": "npm run build:beta",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "Open Xiao (Beta)",
+        "width": 1180,
+        "height": 780,
+        "minWidth": 840,
+        "minHeight": 620,
+        "visible": false,
+        "backgroundColor": "#0a0a0a",
+        "theme": "Dark",
+        "zoomHotkeysEnabled": true
+      }
+    ]
+  },
+  "bundle": {
+    "icon": [
+      "icons-beta/32x32.png",
+      "icons-beta/128x128.png",
+      "icons-beta/128x128@2x.png",
+      "icons-beta/icon.icns",
+      "icons-beta/icon.ico"
+    ]
+  }
+}

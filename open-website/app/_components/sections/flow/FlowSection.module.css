@@ -1,0 +1,99 @@
+.flowSection {
+  --section-heading-width: 11ch;
+  border-top: 1px solid var(--border);
+}
+
+.flowHeading {
+  max-width: 64rem;
+}
+
+.eyebrow {
+  margin-bottom: 24px;
+  color: var(--muted);
+  font-family: var(--font-ibm-plex-mono), monospace;
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.flowVisual {
+  margin-top: clamp(66px, 9vw, 116px);
+}
+
+.flowVisual img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: var(--radius);
+  background: #090a09;
+  box-shadow: var(--shadow);
+}
+
+.flowVisual figcaption {
+  max-width: 32rem;
+  margin-top: 16px;
+  color: var(--subtle);
+  font-family: var(--font-ibm-plex-mono), monospace;
+  font-size: 0.7rem;
+  line-height: 1.5;
+}
+
+.flowList {
+  display: grid;
+  grid-template-columns: 1.2fr 1fr 1fr 1fr;
+  gap: clamp(22px, 4vw, 58px);
+  margin-top: clamp(58px, 8vw, 104px);
+  list-style: none;
+}
+
+.flowList li {
+  padding-top: 22px;
+  border-top: 1px solid var(--border-strong);
+}
+
+.flowList h3 {
+  font-size: 1rem;
+  font-weight: 710;
+  letter-spacing: -0.025em;
+}
+
+.flowList p {
+  margin-top: 10px;
+  color: var(--muted);
+  font-size: 0.9rem;
+  line-height: 1.55;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  @supports (animation-timeline: view()) {
+    .flowVisual img {
+      animation: visualSettle both linear;
+      animation-timeline: view();
+      animation-range: entry 0% cover 42%;
+    }
+  }
+}
+
+@keyframes visualSettle {
+  from {
+    opacity: 0.45;
+    transform: scale(0.975);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@media (max-width: 860px) {
+  .flowList {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (max-width: 520px) {
+  .flowList {
+    grid-template-columns: 1fr;
+  }
+}
