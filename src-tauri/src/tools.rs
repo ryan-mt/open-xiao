@@ -4742,7 +4742,9 @@ mod tool_tests {
     static BG_TEST_LOCK: Mutex<()> = Mutex::new(());
 
     fn temp_project() -> std::path::PathBuf {
-        let mut dir = std::env::temp_dir();
+        let temp_root = std::env::temp_dir();
+        let mut dir =
+            crate::paths::strip_verbatim_prefix(fs::canonicalize(&temp_root).unwrap_or(temp_root));
         let n = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .map(|d| d.as_nanos())

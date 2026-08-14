@@ -1028,6 +1028,11 @@ mod tests {
     use super::*;
     use std::io::Write;
 
+    fn test_temp_root() -> PathBuf {
+        let root = std::env::temp_dir();
+        strip_verbatim_prefix(fs::canonicalize(&root).unwrap_or(root))
+    }
+
     #[cfg(unix)]
     fn symlink_file(target: &Path, link: &Path) -> std::io::Result<()> {
         std::os::unix::fs::symlink(target, link)
@@ -1050,7 +1055,7 @@ mod tests {
 
     #[test]
     fn restore_created_file_removes_it() {
-        let dir = std::env::temp_dir().join(format!("grok-snap-{}", now_ms()));
+        let dir = test_temp_root().join(format!("grok-snap-{}", now_ms()));
         fs::create_dir_all(&dir).unwrap();
         let path = dir.join("new.txt");
         let state = SnapshotState::new();
@@ -1068,7 +1073,7 @@ mod tests {
 
     #[test]
     fn restore_modified_file() {
-        let dir = std::env::temp_dir().join(format!("grok-snap-m-{}", now_ms()));
+        let dir = test_temp_root().join(format!("grok-snap-m-{}", now_ms()));
         fs::create_dir_all(&dir).unwrap();
         let path = dir.join("f.txt");
         {
@@ -1088,7 +1093,7 @@ mod tests {
 
     #[test]
     fn restore_scope_uses_earliest_snapshot_for_each_path() {
-        let dir = std::env::temp_dir().join(format!("grok-snap-scope-{}", now_ms()));
+        let dir = test_temp_root().join(format!("grok-snap-scope-{}", now_ms()));
         fs::create_dir_all(&dir).unwrap();
         let path = dir.join("f.txt");
         fs::write(&path, b"A").unwrap();
@@ -1116,7 +1121,7 @@ mod tests {
 
     #[test]
     fn repeated_capture_in_one_tool_retains_the_earliest_preimage() {
-        let dir = std::env::temp_dir().join(format!("grok-snap-repeat-{}", now_ms()));
+        let dir = test_temp_root().join(format!("grok-snap-repeat-{}", now_ms()));
         fs::create_dir_all(&dir).unwrap();
         let path = dir.join("f.txt");
         fs::write(&path, b"A").unwrap();
@@ -1139,7 +1144,7 @@ mod tests {
 
     #[test]
     fn incomplete_multi_file_snapshot_refuses_a_partial_restore() {
-        let dir = std::env::temp_dir().join(format!("grok-snap-incomplete-{}", now_ms()));
+        let dir = test_temp_root().join(format!("grok-snap-incomplete-{}", now_ms()));
         fs::create_dir_all(&dir).unwrap();
         let small = dir.join("small.txt");
         let large = dir.join("large.txt");
@@ -1166,7 +1171,7 @@ mod tests {
 
     #[test]
     fn snapshot_capacity_evicts_whole_tool_batches() {
-        let dir = std::env::temp_dir().join(format!("grok-snap-evict-batch-{}", now_ms()));
+        let dir = test_temp_root().join(format!("grok-snap-evict-batch-{}", now_ms()));
         fs::create_dir_all(&dir).unwrap();
         let state = SnapshotState::new();
         for name in ["old-a.txt", "old-b.txt"] {
@@ -1196,8 +1201,7 @@ mod tests {
 
     #[test]
     fn oversized_single_tool_batch_cannot_reappear_as_a_partial_snapshot() {
-        let dir =
-            std::env::temp_dir().join(format!("grok-snap-single-batch-overflow-{}", now_ms()));
+        let dir = test_temp_root().join(format!("grok-snap-single-batch-overflow-{}", now_ms()));
         fs::create_dir_all(&dir).unwrap();
         let state = SnapshotState::new();
 
@@ -1218,7 +1222,7 @@ mod tests {
 
     #[test]
     fn restore_rejects_content_changed_after_mark_written() {
-        let dir = std::env::temp_dir().join(format!("grok-snap-conflict-{}", now_ms()));
+        let dir = test_temp_root().join(format!("grok-snap-conflict-{}", now_ms()));
         fs::create_dir_all(&dir).unwrap();
         let path = dir.join("f.txt");
         fs::write(&path, b"old").unwrap();
@@ -1239,7 +1243,7 @@ mod tests {
 
     #[test]
     fn restore_deleted_file_recreates_previous_content() {
-        let dir = std::env::temp_dir().join(format!("grok-snap-delete-{}", now_ms()));
+        let dir = test_temp_root().join(format!("grok-snap-delete-{}", now_ms()));
         fs::create_dir_all(&dir).unwrap();
         let path = dir.join("f.txt");
         fs::write(&path, b"old").unwrap();
@@ -1258,7 +1262,7 @@ mod tests {
 
     #[test]
     fn restore_rejects_file_deleted_after_mark_written() {
-        let dir = std::env::temp_dir().join(format!("grok-snap-user-delete-{}", now_ms()));
+        let dir = test_temp_root().join(format!("grok-snap-user-delete-{}", now_ms()));
         fs::create_dir_all(&dir).unwrap();
         let path = dir.join("f.txt");
         fs::write(&path, b"old").unwrap();
@@ -1279,7 +1283,7 @@ mod tests {
 
     #[test]
     fn restore_rejects_file_recreated_after_agent_delete() {
-        let dir = std::env::temp_dir().join(format!("grok-snap-recreate-{}", now_ms()));
+        let dir = test_temp_root().join(format!("grok-snap-recreate-{}", now_ms()));
         fs::create_dir_all(&dir).unwrap();
         let path = dir.join("f.txt");
         fs::write(&path, b"old").unwrap();
@@ -1300,7 +1304,7 @@ mod tests {
 
     #[test]
     fn restore_rejects_changed_agent_created_file() {
-        let dir = std::env::temp_dir().join(format!("grok-snap-created-conflict-{}", now_ms()));
+        let dir = test_temp_root().join(format!("grok-snap-created-conflict-{}", now_ms()));
         fs::create_dir_all(&dir).unwrap();
         let path = dir.join("new.txt");
         let state = SnapshotState::new();
@@ -1320,7 +1324,7 @@ mod tests {
 
     #[test]
     fn restore_rejects_missing_parent_without_recreating_it() {
-        let dir = std::env::temp_dir().join(format!("grok-snap-missing-parent-{}", now_ms()));
+        let dir = test_temp_root().join(format!("grok-snap-missing-parent-{}", now_ms()));
         let parent = dir.join("nested");
         fs::create_dir_all(&parent).unwrap();
         let path = parent.join("f.txt");
@@ -1343,7 +1347,7 @@ mod tests {
 
     #[test]
     fn restore_rejects_replaced_parent_even_with_matching_content() {
-        let dir = std::env::temp_dir().join(format!("grok-snap-replaced-parent-{}", now_ms()));
+        let dir = test_temp_root().join(format!("grok-snap-replaced-parent-{}", now_ms()));
         let parent = dir.join("nested");
         fs::create_dir_all(&parent).unwrap();
         let path = parent.join("f.txt");
@@ -1379,8 +1383,7 @@ mod tests {
         .into_iter()
         .enumerate()
         {
-            let dir =
-                std::env::temp_dir().join(format!("grok-snap-parent-race-{}-{index}", now_ms()));
+            let dir = test_temp_root().join(format!("grok-snap-parent-race-{}-{index}", now_ms()));
             let workspace = dir.join("workspace");
             let parent = workspace.join("nested");
             let moved_parent = workspace.join("moved");
@@ -1439,7 +1442,7 @@ mod tests {
 
     #[test]
     fn restore_rejects_final_component_symlink_and_preserves_outside_target() {
-        let dir = std::env::temp_dir().join(format!("grok-snap-final-link-{}", now_ms()));
+        let dir = test_temp_root().join(format!("grok-snap-final-link-{}", now_ms()));
         let workspace = dir.join("workspace");
         let outside = dir.join("outside.txt");
         fs::create_dir_all(&workspace).unwrap();
@@ -1469,7 +1472,7 @@ mod tests {
 
     #[test]
     fn restore_rejects_ancestor_symlink_and_preserves_outside_target() {
-        let dir = std::env::temp_dir().join(format!("grok-snap-ancestor-link-{}", now_ms()));
+        let dir = test_temp_root().join(format!("grok-snap-ancestor-link-{}", now_ms()));
         let workspace = dir.join("workspace");
         let parent = workspace.join("nested");
         let outside = dir.join("outside");
@@ -1504,7 +1507,7 @@ mod tests {
     #[cfg(windows)]
     #[test]
     fn restore_rejects_windows_junction_escape_when_available() {
-        let dir = std::env::temp_dir().join(format!("grok-snap-junction-{}", now_ms()));
+        let dir = test_temp_root().join(format!("grok-snap-junction-{}", now_ms()));
         let workspace = dir.join("workspace");
         let parent = workspace.join("nested");
         let outside = dir.join("outside");
@@ -1543,7 +1546,7 @@ mod tests {
 
     #[test]
     fn full_access_restore_uses_the_original_parent_anchor() {
-        let dir = std::env::temp_dir().join(format!("grok-snap-full-access-{}", now_ms()));
+        let dir = test_temp_root().join(format!("grok-snap-full-access-{}", now_ms()));
         let workspace = dir.join("workspace");
         let outside = dir.join("outside");
         fs::create_dir_all(&workspace).unwrap();
@@ -1564,7 +1567,7 @@ mod tests {
 
     #[test]
     fn workspace_capture_rejects_outside_target_without_changing_it() {
-        let dir = std::env::temp_dir().join(format!("grok-snap-outside-{}", now_ms()));
+        let dir = test_temp_root().join(format!("grok-snap-outside-{}", now_ms()));
         let workspace = dir.join("workspace");
         fs::create_dir_all(&workspace).unwrap();
         let outside = dir.join("outside.txt");
@@ -1582,7 +1585,7 @@ mod tests {
 
     #[test]
     fn duplicate_tool_ids_are_isolated_by_stream() {
-        let dir = std::env::temp_dir().join(format!("grok-snap-stream-{}", now_ms()));
+        let dir = test_temp_root().join(format!("grok-snap-stream-{}", now_ms()));
         fs::create_dir_all(&dir).unwrap();
         let first = dir.join("first.txt");
         let second = dir.join("second.txt");
