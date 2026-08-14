@@ -26,12 +26,12 @@ export const APP_DISPLAY_NAME = APP_STAGE_LABEL
   ? `${APP_BASE_NAME} (${APP_STAGE_LABEL})`
   : APP_BASE_NAME;
 
-/** Purple nightly art for beta; blue official art otherwise. */
+/** Beta and official channels use their matching artwork. */
 export const APP_ICON_VARIANT: "nightly" | "official" =
   APP_STAGE === "beta" ? "nightly" : "official";
 
 export const APP_BRAND_LOGO_SRC =
-  APP_ICON_VARIANT === "nightly" ? "/logov2_nightly.png" : "/logov2_offical.png";
+  APP_ICON_VARIANT === "nightly" ? "/logonew_nightly.png" : "/logonew_offical.png";
 
 export const APP_FAVICON_SRC =
   APP_ICON_VARIANT === "nightly"

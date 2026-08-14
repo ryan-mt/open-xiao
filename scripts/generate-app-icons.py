@@ -1,4 +1,4 @@
-"""Generate all app icons from the Open Xiao v2 official and nightly artwork."""
+"""Generate all app icons from the current Open Xiao official and nightly artwork."""
 from __future__ import annotations
 
 import struct
@@ -12,8 +12,8 @@ PUBLIC = ROOT / "public"
 ICONS = ROOT / "src-tauri" / "icons"
 ICONS_BETA = ROOT / "src-tauri" / "icons-beta"
 
-OFFICIAL_SRC = PUBLIC / "logov2_offical.png"
-NIGHTLY_SRC = PUBLIC / "logov2_nightly.png"
+OFFICIAL_SRC = PUBLIC / "logonew_offical.png"
+NIGHTLY_SRC = PUBLIC / "logonew_nightly.png"
 
 
 def load_square(src: Path) -> Image.Image:

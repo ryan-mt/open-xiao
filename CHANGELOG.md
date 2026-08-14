@@ -13,6 +13,8 @@ All notable Open Xiao changes will be recorded in this file.
 - Added automatic provider catalog discovery. Runtime model inventories and
   OpenCode upstream providers now create and refresh their own catalogs without
   requiring UI registration.
+- Added new channel-specific application artwork for Stable and Beta across
+  desktop, web, favicon, and platform icon sets.
 
 ### Fixed
 
