@@ -800,7 +800,7 @@ async fn stream_child_round_once(
 
     if !response.status().is_success() {
         let status = response.status().as_u16();
-        let detail = provider_error_detail(response).await;
+        let detail = provider_error_detail(response, &|| (cancel)()).await;
         return Err(with_provider_detail(
             safe_subagent_http_error(status),
             detail,

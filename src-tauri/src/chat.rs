@@ -978,11 +978,20 @@ fn safe_chat_http_error(status: u16) -> String {
 /// Extract a safe, actionable detail from a provider error body
 /// (e.g. `{"error":{"message":"context length exceeded"}}`). Reads a bounded
 /// prefix only, and redacts anything secret-shaped before returning.
-pub(crate) async fn provider_error_detail(response: reqwest::Response) -> Option<String> {
+pub(crate) async fn provider_error_detail(
+    response: reqwest::Response,
+    stop: StopCheck<'_>,
+) -> Option<String> {
     const MAX_DETAIL_BYTES: usize = 8 * 1024;
+    const ERROR_BODY_IDLE_TIMEOUT: Duration = Duration::from_secs(5);
     let mut bytes = Vec::new();
     let mut stream = response.bytes_stream();
-    while let Some(item) = stream.next().await {
+    loop {
+        let item = match next_stream_item_or_stop(&mut stream, stop, ERROR_BODY_IDLE_TIMEOUT).await
+        {
+            StreamWait::Item(Some(item)) => item,
+            StreamWait::Item(None) | StreamWait::Cancelled | StreamWait::TimedOut => break,
+        };
         let Ok(chunk) = item else {
             break;
         };
@@ -1379,7 +1388,7 @@ async fn stream_chat_round(
                 continue;
             }
             // Non-retryable: surface the provider's own reason when available.
-            let detail = provider_error_detail(response).await;
+            let detail = provider_error_detail(response, stop).await;
             return Err(with_provider_detail(safe_chat_http_error(status), detail));
         }
 
@@ -2675,7 +2684,19 @@ fn err_outcome_chat(text: String) -> ToolOutcome {
 
 /// Only user/assistant turns from the client. System/tool roles are server-owned.
 fn sanitize_client_messages(messages: Vec<ChatMessageIn>) -> Result<Vec<ChatMessageIn>, String> {
+    const MAX_MESSAGES: usize = 2_000;
+    const MAX_PARTS_PER_MESSAGE: usize = 256;
+    const MAX_IMAGES: usize = 20;
+    const MAX_TEXT_BYTES: usize = 8 * 1024 * 1024;
+    const MAX_IMAGE_URL_BYTES: usize = 48 * 1024 * 1024;
+
+    if messages.len() > MAX_MESSAGES {
+        return Err("Conversation has too many messages".into());
+    }
     let mut out = Vec::with_capacity(messages.len());
+    let mut total_text_bytes = 0_usize;
+    let mut total_image_url_bytes = 0_usize;
+    let mut image_count = 0_usize;
     for mut m in messages {
         match m.role.as_str() {
             "user" | "assistant" => {
@@ -2684,18 +2705,35 @@ fn sanitize_client_messages(messages: Vec<ChatMessageIn>) -> Result<Vec<ChatMess
                 m.name = None;
                 // Cap image data URLs / text size from client.
                 if let Some(ChatContent::Parts(parts)) = m.content.as_mut() {
+                    if parts.len() > MAX_PARTS_PER_MESSAGE {
+                        return Err("Message has too many parts".into());
+                    }
                     let mut text_len = 0_usize;
                     for part in parts.iter_mut() {
                         match part {
                             ContentPart::Text { text } => {
                                 text_len = text_len.saturating_add(text.len());
+                                total_text_bytes = total_text_bytes.saturating_add(text.len());
                                 if text_len > 400_000 {
                                     return Err("Message too large".into());
+                                }
+                                if total_text_bytes > MAX_TEXT_BYTES {
+                                    return Err("Conversation text is too large".into());
                                 }
                             }
                             ContentPart::ImageUrl { image_url } => {
                                 if image_url.url.len() > 12_000_000 {
                                     return Err("Image attachment too large".into());
+                                }
+                                image_count = image_count.saturating_add(1);
+                                total_image_url_bytes =
+                                    total_image_url_bytes.saturating_add(image_url.url.len());
+                                if image_count > MAX_IMAGES
+                                    || total_image_url_bytes > MAX_IMAGE_URL_BYTES
+                                {
+                                    return Err(
+                                        "Conversation has too many image attachments".into()
+                                    );
                                 }
                                 if !(image_url.url.starts_with("data:image/")
                                     || image_url.url.starts_with("https://"))
@@ -2709,6 +2747,10 @@ fn sanitize_client_messages(messages: Vec<ChatMessageIn>) -> Result<Vec<ChatMess
                 if let Some(ChatContent::Text(s)) = m.content.as_ref() {
                     if s.len() > 400_000 {
                         return Err("Message too large".into());
+                    }
+                    total_text_bytes = total_text_bytes.saturating_add(s.len());
+                    if total_text_bytes > MAX_TEXT_BYTES {
+                        return Err("Conversation text is too large".into());
                     }
                 }
                 out.push(m);
@@ -2737,8 +2779,9 @@ fn message_to_json(m: ChatMessageIn) -> Value {
 #[cfg(test)]
 mod stream_event_tests {
     use super::{
-        cli_working_directory, drain_chat_sse, redact_tool_arguments, sanitize_client_messages,
-        ChatContent, ChatMessageIn, ContentPart, StreamEvent, UserInputOption, UserInputQuestion,
+        cli_working_directory, drain_chat_sse, provider_error_detail, redact_tool_arguments,
+        sanitize_client_messages, ChatContent, ChatMessageIn, ContentPart, StreamEvent,
+        UserInputOption, UserInputQuestion,
     };
     use crate::provider::ModelProvider;
     use crate::provider_output::MAX_PROVIDER_EVENT_BYTES;
@@ -2880,6 +2923,34 @@ mod stream_event_tests {
         assert!(out.tools.is_empty());
     }
 
+    #[tokio::test]
+    async fn provider_error_detail_stops_without_waiting_for_the_body() {
+        use std::io::{Read, Write};
+
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let address = listener.local_addr().unwrap();
+        let server = std::thread::spawn(move || {
+            let (mut socket, _) = listener.accept().unwrap();
+            let mut request = [0_u8; 2048];
+            let _ = socket.read(&mut request).unwrap();
+            socket
+                .write_all(
+                    b"HTTP/1.1 400 Bad Request\r\nContent-Type: application/json\r\nContent-Length: 100\r\n\r\n",
+                )
+                .unwrap();
+            socket.flush().unwrap();
+            std::thread::sleep(std::time::Duration::from_millis(200));
+        });
+
+        let response = reqwest::Client::new()
+            .get(format!("http://{address}"))
+            .send()
+            .await
+            .unwrap();
+        assert!(provider_error_detail(response, &|| true).await.is_none());
+        server.join().unwrap();
+    }
+
     #[test]
     fn cli_providers_fail_closed_without_a_registered_project() {
         for provider in [ModelProvider::OpenCode, ModelProvider::Antigravity] {
@@ -2902,6 +2973,35 @@ mod stream_event_tests {
         }]);
 
         assert_eq!(result.unwrap_err(), "Message too large");
+    }
+
+    #[test]
+    fn client_messages_enforce_aggregate_limits() {
+        let message = || ChatMessageIn {
+            role: "user".into(),
+            content: Some(ChatContent::Text("x".repeat(400_000))),
+            tool_calls: None,
+            tool_call_id: None,
+            name: None,
+        };
+        let text_result = sanitize_client_messages((0..21).map(|_| message()).collect());
+        assert_eq!(text_result.unwrap_err(), "Conversation text is too large");
+
+        let count_result = sanitize_client_messages(
+            (0..2_001)
+                .map(|_| ChatMessageIn {
+                    role: "assistant".into(),
+                    content: Some(ChatContent::Text(String::new())),
+                    tool_calls: None,
+                    tool_call_id: None,
+                    name: None,
+                })
+                .collect(),
+        );
+        assert_eq!(
+            count_result.unwrap_err(),
+            "Conversation has too many messages"
+        );
     }
 
     #[test]

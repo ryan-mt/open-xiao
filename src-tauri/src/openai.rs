@@ -401,7 +401,7 @@ pub(crate) async fn stream_responses_once(
 
     if !response.status().is_success() {
         let status = response.status().as_u16();
-        let detail = provider_error_detail(response).await;
+        let detail = provider_error_detail(response, should_stop).await;
         return Err(with_provider_detail(
             safe_responses_http_error(status),
             detail,
