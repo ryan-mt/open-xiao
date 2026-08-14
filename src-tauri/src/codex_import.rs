@@ -359,7 +359,7 @@ fn import_chats_from(root: PathBuf) -> Result<CodexImportResult, String> {
             Ok(None) | Err(()) => skipped_files += 1,
         }
     }
-    threads.sort_unstable_by(|left, right| right.updated_at.cmp(&left.updated_at));
+    threads.sort_unstable_by_key(|thread| std::cmp::Reverse(thread.updated_at));
 
     Ok(CodexImportResult {
         threads,

@@ -849,7 +849,7 @@ pub async fn execute_tool_with_depth(
                 Some(c) => c,
                 None => return err_outcome("missing content".into()),
             };
-            write_file(&root, &path, &content, full_access, capture, stamp_scope)
+            write_file(&root, &path, &content, full_access, capture)
         }
         "edit" => {
             let path = match json_str_nonempty(&args, &["filePath", "path", "file_path"]) {
@@ -873,7 +873,6 @@ pub async fn execute_tool_with_depth(
                 json_bool(&args, &["replaceAll", "replace_all"]),
                 full_access,
                 capture,
-                stamp_scope,
             )
         }
         "patch" => {
@@ -881,7 +880,7 @@ pub async fn execute_tool_with_depth(
                 Some(p) => p,
                 None => return err_outcome("missing patch".into()),
             };
-            apply_patch(&root, &patch, full_access, capture, stamp_scope)
+            apply_patch(&root, &patch, full_access, capture)
         }
         "glob" => {
             let pattern = match json_str_nonempty(&args, &["pattern"]) {
@@ -1072,7 +1071,7 @@ pub async fn execute_tool_with_depth(
                 Some(p) => p,
                 None => return err_outcome("missing filePath".into()),
             };
-            delete_file(&root, &path, full_access, capture, stamp_scope)
+            delete_file(&root, &path, full_access, capture)
         }
         other => Err(format!(
             "Unknown tool: {other}. Available tools: read, write, edit, patch, delete, bash, glob, grep, webfetch, websearch, question, todowrite, task, and registered application tools"
@@ -2608,8 +2607,8 @@ fn edit_file(
     replace_all: bool,
     full_access: bool,
     capture: Option<MutationCapture<'_>>,
-    stamp_scope: &str,
 ) -> Result<String, String> {
+    let stamp_scope = read_stamp_scope(capture);
     if old_string.is_empty() {
         return Err("oldString must not be empty".into());
     }
@@ -2744,8 +2743,8 @@ fn write_file(
     content: &str,
     full_access: bool,
     capture: Option<MutationCapture<'_>>,
-    stamp_scope: &str,
 ) -> Result<String, String> {
+    let stamp_scope = read_stamp_scope(capture);
     if content.chars().count() > MAX_WRITE_CHARS {
         return Err("content too large".into());
     }
@@ -2844,8 +2843,8 @@ fn delete_file(
     rel: &str,
     full_access: bool,
     capture: Option<MutationCapture<'_>>,
-    stamp_scope: &str,
 ) -> Result<String, String> {
+    let stamp_scope = read_stamp_scope(capture);
     let mutation_fs = MutationFs::new(root, full_access)?;
     let path = resolve_existing_path(root, rel, full_access)?;
     if !path.is_file() {
@@ -3107,8 +3106,8 @@ fn apply_patch(
     patch: &str,
     full_access: bool,
     capture: Option<MutationCapture<'_>>,
-    stamp_scope: &str,
 ) -> Result<String, String> {
+    let stamp_scope = read_stamp_scope(capture);
     let mutation_fs = MutationFs::new(root, full_access)?;
     let files = parse_patch(patch)?;
 
@@ -5031,7 +5030,6 @@ mod tool_tests {
                 workspace_root: &root,
                 full_access: false,
             }),
-            "s1",
         );
         assert!(result.is_err());
         assert!(snapshots.list_for_stream("s1").is_empty());
