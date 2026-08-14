@@ -1,6 +1,6 @@
 Open Xiao maintenance fixes
 Date: 2026-08-14
-Built source commit: cdc4d02
+Built source tree: maintenance series rebased onto release commit bb4879e
 
 Runtime and security fixes
 - Fresh-read authorization is scoped by stream, so one agent cannot authorize
