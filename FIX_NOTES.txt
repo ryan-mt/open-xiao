@@ -1,0 +1,54 @@
+Open Xiao maintenance fixes
+Date: 2026-08-14
+Built source commit: cdc4d02
+
+Runtime and security fixes
+- Fresh-read authorization is scoped by stream, so one agent cannot authorize
+  another agent's file mutation.
+- Chat IPC rejects excessive aggregate message, text, part, and image payloads.
+- Provider error bodies stop on cancellation or a five-second idle deadline.
+- OpenCode event streams fail after ten minutes without event bytes, releasing
+  the per-thread stream lock.
+- OpenCode approval bindings are cleared at stream ownership boundaries.
+- Removing a workspace revokes and terminates its active terminal sessions.
+- Unknown permission and agent mode strings are rejected at the Rust IPC boundary.
+- Project file search failures settle loading and show an explicit error.
+- Review Undo availability clears immediately on thread changes and stays disabled
+  when snapshot lookup fails.
+
+Maintenance and verification improvements
+- Added Vitest, jsdom, and Testing Library to the existing frontend test gate.
+- Added behavioral tests for project file search failure, Review Undo ownership,
+  and Auth modal Escape/focus behavior.
+- Extracted Review Undo availability from App.tsx and lazy-loaded the project file
+  picker to keep the production entry chunk below 500 kB.
+- Added standalone website lint, typecheck, and production build checks to CI.
+
+Verification
+- npm run verify:release: PASS
+  - 394 Node frontend tests passed.
+  - 4 Vitest interaction tests passed.
+  - TypeScript typecheck and stable frontend build passed.
+  - 344 Rust tests passed; 6 environment-dependent tests ignored.
+  - Cargo Clippy with -D warnings and rustfmt check passed.
+- Standalone website lint, typecheck, and production build: PASS
+
+Local Windows x64 artifacts
+These artifacts are unsigned local verification builds. Do not publish them as an
+official release until code signing and the release acceptance checklist pass.
+
+Stable
+- src-tauri/target-stable/release/bundle/msi/Open Xiao_0.1.0_x64_en-US.msi
+  Size: 20672512 bytes
+  SHA-256: D52DDEE0F9A72B989F34DD367714C39B29EB1D2414598B6211B426E965E56537
+- src-tauri/target-stable/release/bundle/nsis/Open Xiao_0.1.0_x64-setup.exe
+  Size: 17813311 bytes
+  SHA-256: 615D44D9E007D6A80143F2FBB78FE93B46D087BE3555D24D46FEA903235D8256
+
+Beta
+- src-tauri/target-beta/release/bundle/msi/Open Xiao (Beta)_0.1.0_x64_en-US.msi
+  Size: 20684800 bytes
+  SHA-256: F77646191FEA0D963301254C2845F27B8C1FFE416B66BD8D183BEC14B4A0F3B5
+- src-tauri/target-beta/release/bundle/nsis/Open Xiao (Beta)_0.1.0_x64-setup.exe
+  Size: 17822531 bytes
+  SHA-256: E99310363A880DF4954A352502066C33BD9B5689F45D75A3554D6BACAC5917A0
