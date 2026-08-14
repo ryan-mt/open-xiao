@@ -34,6 +34,7 @@ const COMMAND_TIMEOUT: Duration = Duration::from_secs(15);
 const CONTROL_REQUEST_TIMEOUT: Duration = Duration::from_secs(15);
 const ABORT_REQUEST_TIMEOUT: Duration = Duration::from_secs(2);
 const STARTUP_TIMEOUT: Duration = Duration::from_secs(5);
+const EVENT_STREAM_IDLE_TIMEOUT: Duration = Duration::from_secs(10 * 60);
 const MAX_SERVER_REPORT_BYTES: usize = 1024;
 
 fn session_permission_rules(
@@ -527,6 +528,13 @@ impl OpenCodeState {
             .retain(|(owner_stream, _), binding| {
                 owner_stream != stream_id || binding.request_id != request_id
             });
+    }
+
+    async fn clear_approvals_for_stream(&self, stream_id: &str) {
+        self.approvals
+            .lock()
+            .await
+            .retain(|(owner_stream, _), _| owner_stream != stream_id);
     }
 
     fn authenticated_get(&self, access: &RuntimeAccess, url: String) -> reqwest::RequestBuilder {
@@ -1480,16 +1488,22 @@ enum OpenCodeEventItem<T> {
 async fn next_open_code_event_item<S, T, E>(
     stream: &mut S,
     stop: StopCheck<'_>,
+    idle_timeout: Duration,
 ) -> OpenCodeEventItem<T>
 where
     S: futures_util::Stream<Item = Result<T, E>> + Unpin,
     E: std::fmt::Display,
 {
+    let deadline = Instant::now() + idle_timeout;
     loop {
         if stop() {
             return OpenCodeEventItem::Cancelled;
         }
-        match tokio::time::timeout(Duration::from_millis(100), stream.next()).await {
+        let remaining = deadline.saturating_duration_since(Instant::now());
+        if remaining.is_zero() {
+            return OpenCodeEventItem::Failed("OpenCode event stream stalled.".into());
+        }
+        match tokio::time::timeout(remaining.min(Duration::from_millis(100)), stream.next()).await {
             Err(_) => continue,
             Ok(Some(Ok(chunk))) => return OpenCodeEventItem::Chunk(chunk),
             Ok(Some(Err(error))) => {
@@ -1552,6 +1566,7 @@ pub async fn stream_chat(
     }
     let stream_lock = state.stream_lock(stream_id).await;
     let _stream_guard = stream_lock.lock().await;
+    state.clear_approvals_for_stream(stream_id).await;
     if stop() {
         return Ok(());
     }
@@ -1667,11 +1682,12 @@ pub async fn stream_chat(
     let mut finished_tools = HashSet::new();
     let mut event_router = OpenCodeEventRouter::default();
     let exit = 'events: loop {
-        let chunk = match next_open_code_event_item(&mut stream, stop).await {
-            OpenCodeEventItem::Chunk(chunk) => chunk,
-            OpenCodeEventItem::Cancelled => break OpenCodeSessionExit::Cancelled,
-            OpenCodeEventItem::Failed(error) => break OpenCodeSessionExit::Failed(error),
-        };
+        let chunk =
+            match next_open_code_event_item(&mut stream, stop, EVENT_STREAM_IDLE_TIMEOUT).await {
+                OpenCodeEventItem::Chunk(chunk) => chunk,
+                OpenCodeEventItem::Cancelled => break OpenCodeSessionExit::Cancelled,
+                OpenCodeEventItem::Failed(error) => break OpenCodeSessionExit::Failed(error),
+            };
         let lines = match event_lines.push(&chunk) {
             Ok(lines) => lines,
             Err(error) => {
@@ -1844,6 +1860,7 @@ pub async fn stream_chat(
             }
         }
     };
+    state.clear_approvals_for_stream(stream_id).await;
     finish_session_stream(state, &runtime, &session_id, &directory, exit).await
 }
 
@@ -2006,7 +2023,13 @@ mod tests {
             .error_for_status()
             .expect("local event stream status");
         let mut event_stream = response.bytes_stream();
-        let exit = match next_open_code_event_item(&mut event_stream, &|| false).await {
+        let exit = match next_open_code_event_item(
+            &mut event_stream,
+            &|| false,
+            EVENT_STREAM_IDLE_TIMEOUT,
+        )
+        .await
+        {
             OpenCodeEventItem::Failed(error) => OpenCodeSessionExit::Failed(error),
             _ => panic!("clean event-stream EOF must be a nonterminal failure"),
         };
@@ -2028,6 +2051,20 @@ mod tests {
             "abort endpoint was not called: {}",
             requests[1]
         );
+    }
+
+    #[tokio::test]
+    async fn silent_event_stream_expires_at_its_idle_deadline() {
+        let mut stream = futures_util::stream::pending::<Result<Vec<u8>, String>>();
+        let started = Instant::now();
+        let item =
+            next_open_code_event_item(&mut stream, &|| false, Duration::from_millis(20)).await;
+
+        assert!(matches!(
+            item,
+            OpenCodeEventItem::Failed(error) if error.contains("stalled")
+        ));
+        assert!(started.elapsed() < Duration::from_secs(1));
     }
 
     #[tokio::test]
@@ -2445,6 +2482,27 @@ mod tests {
                 .map(|binding| binding.directory.as_str()),
             Some("C:/workspace-b")
         );
+    }
+
+    #[tokio::test]
+    async fn stream_cleanup_removes_only_its_approval_bindings() {
+        let state = OpenCodeState::default();
+        for (stream, request) in [("stream-a", "request-a"), ("stream-b", "request-b")] {
+            state
+                .register_approval(
+                    stream,
+                    "shared-tool".into(),
+                    request.into(),
+                    format!("C:/{stream}"),
+                )
+                .await;
+        }
+
+        state.clear_approvals_for_stream("stream-a").await;
+
+        let approvals = state.approvals.lock().await;
+        assert_eq!(approvals.len(), 1);
+        assert!(approvals.contains_key(&("stream-b".into(), "shared-tool".into())));
     }
 
     #[test]
