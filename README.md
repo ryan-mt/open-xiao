@@ -1,6 +1,6 @@
 # Open Xiao
 
-Open Xiao desktop agent client (Tauri 2 + React 19 + TypeScript). Chat, project tools, git worktrees, plan/review panels, and separate Grok/xAI and OpenAI model catalogs.
+Open Xiao desktop agent client (Tauri 2 + React 19 + TypeScript). Chat, project tools, git worktrees, scheduled automations, plan/review panels, and separate Grok/xAI and OpenAI model catalogs.
 
 OpenAI access is native: the app signs in with ChatGPT OAuth and calls the OpenAI Responses API directly — no Codex CLI wrapper.
 

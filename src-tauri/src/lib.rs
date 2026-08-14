@@ -1,6 +1,7 @@
 mod agent_tools;
 mod antigravity;
 mod auth;
+mod automation;
 mod chat;
 mod child_process;
 mod codex_import;
@@ -50,6 +51,7 @@ pub fn run() {
         .setup(|app| {
             let conn = db::open_db(app.handle()).map_err(|e| e.to_string())?;
             app.manage(db::DbState(std::sync::Mutex::new(conn)));
+            automation::start_scheduler(app.handle().clone());
             let agent_tools = agent_tools::start_mcp_server(app.handle().clone())?;
             app.manage(agent_tools);
             let app_handle = app.handle().clone();
@@ -134,6 +136,12 @@ pub fn run() {
             preview::preview_capture,
             preview::preview_discover_servers,
             usage::usage_summary,
+            automation::automation_list,
+            automation::automation_upsert,
+            automation::automation_set_enabled,
+            automation::automation_delete,
+            automation::automation_run_now,
+            automation::automation_record_run,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

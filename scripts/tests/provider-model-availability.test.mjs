@@ -9,6 +9,7 @@ import {
   availableModelCatalogs,
   configureAntigravityModels,
   configureOpenCodeModels,
+  configureProviderModels,
   getModel,
   isKnownModelId,
   providerOf,
@@ -190,6 +191,65 @@ test("Antigravity models keep a separate CLI-backed catalog", () => {
   configureAntigravityModels([]);
 });
 
+test("new runtime and upstream providers create catalogs from inventory", () => {
+  configureProviderModels("future-runtime", [
+    {
+      id: "future-model",
+      label: "Future Model",
+      description: "Discovered model",
+      provider: "future-runtime",
+      thinking: false,
+      defaultThinking: "off",
+      supportedThinking: ["off"],
+      context: "128k",
+    },
+  ]);
+  configureOpenCodeModels([
+    {
+      id: "opencode::anthropic/claude",
+      label: "Claude",
+      description: "Anthropic via OpenCode",
+      provider: "opencode",
+      subProvider: "Anthropic",
+      subProviderId: "anthropic",
+      thinking: true,
+      defaultThinking: "medium",
+      supportedThinking: ["low", "medium", "high"],
+      context: "200k",
+    },
+    {
+      id: "opencode::google/gemini",
+      label: "Gemini",
+      description: "Google via OpenCode",
+      provider: "opencode",
+      subProvider: "Google",
+      subProviderId: "google",
+      thinking: true,
+      defaultThinking: "medium",
+      supportedThinking: ["low", "medium", "high"],
+      context: "1M",
+    },
+  ]);
+
+  const catalogs = availableModelCatalogs({
+    grok: false,
+    openai: false,
+    antigravity: false,
+    opencode: true,
+  });
+  assert.deepEqual(
+    catalogs.map((catalog) => [catalog.id, catalog.title]),
+    [
+      ["opencode:anthropic", "Anthropic"],
+      ["opencode:google", "Google"],
+      ["future-runtime", "Future Runtime"],
+    ],
+  );
+
+  configureProviderModels("future-runtime", []);
+  configureOpenCodeModels([]);
+});
+
 test("provider availability is wired through App, Composer, and ModelSelect", () => {
   const app = read("src/App.tsx");
   const composer = read("src/components/Composer.tsx");
@@ -204,5 +264,13 @@ test("provider availability is wired through App, Composer, and ModelSelect", ()
   assert.match(
     modelSelect,
     /availableModelCatalogs\(providerAvailability\)/,
+  );
+  assert.match(
+    app,
+    /availableModelCatalogs\(modelSelectionAvailability\)\.flatMap/,
+  );
+  assert.doesNotMatch(
+    app,
+    /model\.provider === "grok" \|\| model\.provider === "openai"/,
   );
 });

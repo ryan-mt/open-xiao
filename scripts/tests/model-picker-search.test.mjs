@@ -54,7 +54,7 @@ test("a provider-locked thread keeps its same-provider Favorites view", () => {
   );
   assert.match(
     modelSelect,
-    /lockedProvider != null &&\s*selectedCatalog !== "favorites" &&\s*selectedCatalog !== lockedProvider/,
+    /lockedProvider != null &&\s*selectedCatalog !== "favorites" &&\s*selectedEntry\?\.provider !== lockedProvider/,
     "provider locking must allow Favorites while blocking other providers",
   );
 });

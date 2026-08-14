@@ -101,6 +101,7 @@ export function openCodeModelsForCatalog(models: OpenCodeModel[]): Model[] {
       description: `${model.upstreamProviderName} via OpenCode`,
       provider: "opencode",
       subProvider: model.upstreamProviderName,
+      subProviderId: model.upstreamProvider,
       thinking: supportedThinking.some((level) => level !== "off"),
       defaultThinking,
       supportedThinking,

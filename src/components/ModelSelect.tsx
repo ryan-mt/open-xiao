@@ -84,7 +84,16 @@ function ProviderModelIcon({ provider, size = 16 }: { provider: ModelProvider; s
   if (provider === "openai") return <OpenAILogo size={size} />;
   if (provider === "antigravity") return <AntigravityLogo size={size} />;
   if (provider === "opencode") return <OpenCodeLogo size={size} />;
-  return <GrokLogo size={size} />;
+  if (provider === "grok") return <GrokLogo size={size} />;
+  return (
+    <span
+      className="msel__provider-fallback"
+      style={{ width: size, height: size, fontSize: Math.max(9, size * 0.55) }}
+      aria-hidden
+    >
+      {provider.charAt(0).toUpperCase()}
+    </span>
+  );
 }
 
 export function ModelSelect({
@@ -119,7 +128,7 @@ export function ModelSelect({
   const [modelSearch, setModelSearch] = useState("");
   const [favoriteModelIds, setFavoriteModelIds] = useState(loadModelFavorites);
   const selectedModel = getModel(modelId);
-  const model = providerAvailability[selectedModel.provider]
+  const model = providerAvailability[selectedModel.provider] !== false
     ? selectedModel
     : null;
   const fastModeAvailable =
@@ -134,10 +143,14 @@ export function ModelSelect({
     () => availableModelCatalogs(providerAvailability),
     [providerAvailability],
   );
-  const [selectedCatalog, setSelectedCatalog] = useState<
-    ModelProvider | "favorites"
-  >(() =>
-    lockedProvider ?? (favoriteModelIds.length > 0 ? "favorites" : selectedModel.provider),
+  const catalogIdForModel = (candidateId: string) =>
+    modelCatalogs.find((catalog) =>
+      catalog.models.some((catalogModel) => catalogModel.id === candidateId),
+    )?.id;
+  const [selectedCatalog, setSelectedCatalog] = useState<string>(() =>
+    favoriteModelIds.length > 0
+      ? "favorites"
+      : (catalogIdForModel(modelId) ?? modelCatalogs[0]?.id ?? "favorites"),
   );
   const favoriteModelSet = useMemo(
     () => new Set(favoriteModelIds),
@@ -148,6 +161,7 @@ export function ModelSelect({
       modelCatalogs.flatMap((catalog) =>
         catalog.models.map((catalogModel) => ({
           model: catalogModel,
+          catalogId: catalog.id,
           catalogTitle: catalog.title,
         })),
       ),
@@ -181,11 +195,11 @@ export function ModelSelect({
     }
 
     return allModelItems
-      .filter(({ model: catalogModel }) => {
+      .filter(({ model: catalogModel, catalogId }) => {
         if (lockedProvider != null && catalogModel.provider !== lockedProvider) return false;
         return selectedCatalog === "favorites"
           ? favoriteModelSet.has(catalogModel.id)
-          : catalogModel.provider === selectedCatalog;
+          : catalogId === selectedCatalog;
       })
       .sort((left, right) =>
         Number(favoriteModelSet.has(right.model.id)) -
@@ -210,21 +224,30 @@ export function ModelSelect({
   const agentMeta = AGENT_MODES.find((a) => a.id === agentMode);
 
   useEffect(() => {
+    const selectedEntry = modelCatalogs.find(
+      (catalog) => catalog.id === selectedCatalog,
+    );
     if (
       lockedProvider != null &&
       selectedCatalog !== "favorites" &&
-      selectedCatalog !== lockedProvider
+      selectedEntry?.provider !== lockedProvider
     ) {
-      setSelectedCatalog(lockedProvider);
+      setSelectedCatalog(
+        catalogIdForModel(modelId) ??
+          modelCatalogs.find((catalog) => catalog.provider === lockedProvider)?.id ??
+          "favorites",
+      );
       return;
     }
     if (
       selectedCatalog !== "favorites" &&
-      !modelCatalogs.some((catalog) => catalog.provider === selectedCatalog)
+      selectedEntry == null
     ) {
-      setSelectedCatalog(model?.provider ?? modelCatalogs[0]?.provider ?? "favorites");
+      setSelectedCatalog(
+        catalogIdForModel(modelId) ?? modelCatalogs[0]?.id ?? "favorites",
+      );
     }
-  }, [lockedProvider, model?.provider, modelCatalogs, selectedCatalog]);
+  }, [lockedProvider, modelCatalogs, modelId, selectedCatalog]);
 
   const toggleFavorite = (favoriteId: string) => {
     setFavoriteModelIds((current) => {
@@ -486,11 +509,11 @@ export function ModelSelect({
                         lockedProvider != null && catalog.provider !== lockedProvider;
                       return (
                         <button
-                          key={catalog.provider}
+                          key={catalog.id}
                           type="button"
-                          className={`msel__provider-tab${selectedCatalog === catalog.provider ? " is-selected" : ""}`}
+                          className={`msel__provider-tab${selectedCatalog === catalog.id ? " is-selected" : ""}`}
                           onClick={() => {
-                            setSelectedCatalog(catalog.provider);
+                            setSelectedCatalog(catalog.id);
                             modelSearchRef.current?.focus();
                           }}
                           disabled={providerLocked}
@@ -584,7 +607,9 @@ export function ModelSelect({
                     ) : null}
                   </div>
 
-                  {!modelSearch.trim() && selectedCatalog === "openai" ? (
+                  {!modelSearch.trim() &&
+                  modelCatalogs.find((catalog) => catalog.id === selectedCatalog)
+                    ?.provider === "openai" ? (
                     <div className="msel__fast-row" title={fastModeHelp}>
                       <span className="msel__fast-copy">
                         <span className="msel__fast-title">

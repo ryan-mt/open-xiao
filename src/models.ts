@@ -16,8 +16,8 @@ export type PermissionMode = "auto" | "ask";
 /** Plan = read-only research; Build = full coding tools. */
 export type AgentMode = "plan" | "build";
 
-export type ModelProvider = "grok" | "openai" | "antigravity" | "opencode";
-export type ProviderAvailability = Record<ModelProvider, boolean>;
+export type ModelProvider = string;
+export type ProviderAvailability = Readonly<Record<ModelProvider, boolean>>;
 
 export type Model = {
   id: string;
@@ -26,6 +26,8 @@ export type Model = {
   provider: ModelProvider;
   /** Upstream service when the runtime aggregates models from other providers. */
   subProvider?: string;
+  /** Stable upstream key used to keep aggregated provider catalogs distinct. */
+  subProviderId?: string;
   /** supports reasoning / thinking controls */
   thinking: boolean;
   /** Supports OpenAI priority routing (Fast mode). */
@@ -145,6 +147,7 @@ export const OPENAI_MODELS: Model[] = [
 
 export const OPENCODE_MODELS: Model[] = [];
 export const ANTIGRAVITY_MODELS: Model[] = [];
+const DISCOVERED_PROVIDER_MODELS = new Map<ModelProvider, Model[]>();
 export const ALL_MODELS: Model[] = [
   ...GROK_MODELS,
   ...OPENAI_MODELS,
@@ -160,6 +163,7 @@ function refreshAllModels(): void {
     ...OPENAI_MODELS,
     ...ANTIGRAVITY_MODELS,
     ...OPENCODE_MODELS,
+    ...[...DISCOVERED_PROVIDER_MODELS.values()].flat(),
   );
 }
 
@@ -171,6 +175,62 @@ export function configureAntigravityModels(models: Model[]): void {
 export function configureOpenCodeModels(models: Model[]): void {
   OPENCODE_MODELS.splice(0, OPENCODE_MODELS.length, ...models);
   refreshAllModels();
+}
+
+/** Publish a runtime's model snapshot without adding it to a central provider list. */
+export function configureProviderModels(
+  provider: ModelProvider,
+  models: Model[],
+): void {
+  if (provider === "antigravity") {
+    configureAntigravityModels(models);
+    return;
+  }
+  if (provider === "opencode") {
+    configureOpenCodeModels(models);
+    return;
+  }
+  if (models.length === 0) DISCOVERED_PROVIDER_MODELS.delete(provider);
+  else DISCOVERED_PROVIDER_MODELS.set(provider, models);
+  refreshAllModels();
+}
+
+function providerTitle(provider: ModelProvider): string {
+  if (provider === "openai") return "OpenAI";
+  if (provider === "opencode") return "OpenCode";
+  return provider
+    .replace(/([a-z])([A-Z])/g, "$1 $2")
+    .replace(/[_-]+/g, " ")
+    .trim()
+    .replace(/\b\w/g, (character) => character.toUpperCase());
+}
+
+export type ModelCatalog = {
+  id: string;
+  provider: ModelProvider;
+  title: string;
+  models: Model[];
+};
+
+/** Derive catalogs from provider inventory so new providers need no UI registration. */
+export function modelCatalogsForModels(models: readonly Model[]): ModelCatalog[] {
+  const catalogs = new Map<string, ModelCatalog>();
+  for (const model of models) {
+    const upstreamKey = model.subProviderId?.trim() || model.subProvider?.trim();
+    const id = upstreamKey ? `${model.provider}:${upstreamKey}` : model.provider;
+    const existing = catalogs.get(id);
+    if (existing) {
+      existing.models.push(model);
+      continue;
+    }
+    catalogs.set(id, {
+      id,
+      provider: model.provider,
+      title: model.subProvider?.trim() || providerTitle(model.provider),
+      models: [model],
+    });
+  }
+  return [...catalogs.values()];
 }
 
 /** Persisted dynamic model ids remain valid while their async catalog reloads. */
@@ -186,38 +246,10 @@ export function isKnownModelId(id: string): boolean {
 
 export function availableModelCatalogs(
   availability: ProviderAvailability,
-): Array<{
-  provider: ModelProvider;
-  title: string;
-  models: Model[];
-}> {
-  const catalogs: Array<{
-    provider: ModelProvider;
-    title: string;
-    models: Model[];
-  }> = [
-    {
-      provider: "grok",
-      title: "Grok",
-      models: GROK_MODELS,
-    },
-    {
-      provider: "openai",
-      title: "OpenAI",
-      models: OPENAI_MODELS,
-    },
-    {
-      provider: "antigravity",
-      title: "Antigravity",
-      models: ANTIGRAVITY_MODELS,
-    },
-    {
-      provider: "opencode",
-      title: "OpenCode",
-      models: OPENCODE_MODELS,
-    },
-  ];
-  return catalogs.filter((catalog) => availability[catalog.provider]);
+): ModelCatalog[] {
+  return modelCatalogsForModels(ALL_MODELS).filter(
+    (catalog) => availability[catalog.provider] !== false,
+  );
 }
 
 export function reconcileAvailableModelId(
@@ -225,10 +257,10 @@ export function reconcileAvailableModelId(
   availability: ProviderAvailability,
 ): string | null {
   const current = ALL_MODELS.find((model) => model.id === currentId);
-  if (current && availability[current.provider]) return current.id;
+  if (current && availability[current.provider] !== false) return current.id;
   if (isKnownModelId(currentId)) {
     const provider = providerOf(currentId);
-    if (availability[provider]) return currentId;
+    if (availability[provider] !== false) return currentId;
   }
   return availableModelCatalogs(availability)[0]?.models[0]?.id ?? null;
 }

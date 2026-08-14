@@ -1,7 +1,7 @@
 {
   "name": "open-xiao",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Open Xiao desktop agent client",
   "type": "module",
   "scripts": {

@@ -4317,6 +4317,15 @@ html.dark .sb-wake-label {
   cursor: not-allowed;
 }
 
+.msel__provider-fallback {
+  display: grid;
+  place-items: center;
+  border: 1px solid currentColor;
+  border-radius: 0.3rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
 .msel__provider-divider {
   display: block;
   height: 1px;
@@ -7045,6 +7054,422 @@ html.dark .opencode-logo__inner {
 .settings-v2__nav-item.is-active .settings-v2__nav-count {
   color: var(--foreground);
   background: color-mix(in srgb, var(--foreground) 12%, transparent);
+}
+
+/* Scheduled automations */
+.automation-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.automation-header__subtitle {
+  margin: 0.25rem 0 0;
+  color: var(--muted-foreground);
+  font-size: 0.75rem;
+  line-height: 1.35;
+}
+
+.automation-new {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.automation-back {
+  display: inline-grid;
+  width: 2rem;
+  height: 2rem;
+  flex: 0 0 auto;
+  place-items: center;
+  margin-top: 0.1rem;
+  border: 1px solid var(--border);
+  border-radius: 0.4rem;
+  background: var(--card);
+  color: var(--muted-foreground);
+}
+
+.automation-back:hover {
+  background: var(--accent);
+  color: var(--foreground);
+}
+
+.automation-page,
+.automation-editor {
+  min-height: 0;
+}
+
+.automation-error-banner {
+  padding: 0.65rem 0.75rem;
+  border: 1px solid color-mix(in srgb, #ef4444 36%, var(--border));
+  border-radius: 0.45rem;
+  background: color-mix(in srgb, #ef4444 8%, var(--card));
+  color: color-mix(in srgb, #ef4444 82%, var(--foreground));
+  font-size: 0.75rem;
+  line-height: 1.4;
+}
+
+.automation-empty {
+  display: flex;
+  min-height: 20rem;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  padding: 2.5rem 1.5rem;
+  border: 1px dashed color-mix(in srgb, var(--border) 84%, transparent);
+  border-radius: 0.75rem;
+  background: color-mix(in srgb, var(--card) 45%, transparent);
+  text-align: center;
+}
+
+.automation-empty__mark {
+  display: grid;
+  width: 3.25rem;
+  height: 3.25rem;
+  place-items: center;
+  margin-bottom: 1rem;
+  border: 1px solid var(--border);
+  border-radius: 0.8rem;
+  background: var(--card);
+  color: var(--muted-foreground);
+}
+
+.automation-empty h3 {
+  margin: 0;
+  color: var(--foreground);
+  font-size: 0.9375rem;
+  font-weight: 620;
+}
+
+.automation-empty p {
+  max-width: 28rem;
+  margin: 0.55rem 0 1.2rem;
+  color: var(--muted-foreground);
+  font-size: 0.8125rem;
+  line-height: 1.5;
+}
+
+.automation-list {
+  overflow: hidden;
+  border-block: 1px solid var(--border);
+  background: transparent;
+}
+
+.automation-row {
+  display: grid;
+  grid-template-columns: 0.45rem minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.7rem;
+  padding: 0.62rem 0.15rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.automation-row:last-child {
+  border-bottom: 0;
+}
+
+.automation-row__status {
+  width: 0.42rem;
+  height: 0.42rem;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--muted-foreground) 45%, transparent);
+}
+
+.automation-row__status[data-status="running"] {
+  background: #3b82f6;
+  box-shadow: 0 0 0 3px color-mix(in srgb, #3b82f6 16%, transparent);
+}
+
+.automation-row__status[data-status="succeeded"] {
+  background: #22c55e;
+}
+
+.automation-row__status[data-status="failed"] {
+  background: #ef4444;
+}
+
+.automation-row__copy {
+  min-width: 0;
+}
+
+.automation-row__title-line {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.automation-row__title-line h3 {
+  overflow: hidden;
+  margin: 0;
+  color: var(--foreground);
+  font-size: 0.875rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.automation-status {
+  flex: 0 0 auto;
+  padding: 0.18rem 0.42rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--muted-foreground);
+  font-size: 0.625rem;
+  font-weight: 600;
+  line-height: 1;
+}
+
+.automation-status.is-running {
+  border-color: color-mix(in srgb, #3b82f6 35%, var(--border));
+  color: #3b82f6;
+}
+
+.automation-status.is-succeeded {
+  border-color: color-mix(in srgb, #22c55e 35%, var(--border));
+  color: color-mix(in srgb, #16a34a 82%, var(--foreground));
+}
+
+.automation-status.is-failed {
+  border-color: color-mix(in srgb, #ef4444 35%, var(--border));
+  color: #ef4444;
+}
+
+.automation-row__prompt {
+  overflow: hidden;
+  margin: 0.3rem 0 0;
+  color: var(--muted-foreground);
+  font-size: 0.75rem;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.automation-row__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.8rem;
+  margin-top: 0.35rem;
+  color: color-mix(in srgb, var(--muted-foreground) 80%, transparent);
+  font-family: var(--font-mono);
+  font-size: 0.6rem;
+}
+
+.automation-row__meta span + span::before {
+  content: "·";
+  margin-right: 0.8rem;
+}
+
+.automation-row__error {
+  overflow: hidden;
+  margin: 0.5rem 0 0;
+  color: #ef4444;
+  font-size: 0.6875rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.automation-row__actions {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.automation-row__actions > button:not(.settings-v2__switch) {
+  display: grid;
+  width: 1.9rem;
+  height: 1.9rem;
+  place-items: center;
+  border: 0;
+  border-radius: 0.4rem;
+  background: transparent;
+  color: var(--muted-foreground);
+}
+
+.automation-row__actions > button:not(.settings-v2__switch):hover:not(:disabled) {
+  background: var(--accent);
+  color: var(--foreground);
+}
+
+.automation-row__actions > button.is-danger:hover:not(:disabled) {
+  background: color-mix(in srgb, #ef4444 12%, transparent);
+  color: #ef4444;
+}
+
+.automation-row__actions button:disabled {
+  opacity: 0.4;
+}
+
+.automation-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+}
+
+.automation-field {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.automation-field label,
+.automation-enabled-row strong {
+  color: var(--foreground);
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.automation-field__label-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.automation-field__label-row span {
+  color: var(--muted-foreground);
+  font-size: 0.6875rem;
+}
+
+.automation-field input,
+.automation-field textarea {
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 0.45rem;
+  outline: 0;
+  background: var(--card);
+  color: var(--foreground);
+  font: inherit;
+  font-size: 0.8125rem;
+}
+
+.automation-field input {
+  height: 2.25rem;
+  padding: 0 0.7rem;
+}
+
+.automation-field textarea {
+  min-height: 5.5rem;
+  padding: 0.65rem 0.7rem;
+  line-height: 1.45;
+  resize: vertical;
+}
+
+.automation-field input:focus,
+.automation-field textarea:focus {
+  border-color: color-mix(in srgb, var(--ring) 58%, var(--border));
+}
+
+.automation-field input::placeholder,
+.automation-field textarea::placeholder {
+  color: color-mix(in srgb, var(--muted-foreground) 70%, transparent);
+}
+
+.automation-form-grid {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.automation-form-grid--three {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.automation-form-grid--four {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.automation-select,
+.automation-select .cselect__trigger {
+  width: 100%;
+}
+
+.automation-select .cselect__trigger {
+  height: 2.25rem;
+}
+
+.automation-field--narrow {
+  max-width: 12rem;
+}
+
+.automation-schedule-row {
+  display: grid;
+  grid-template-columns: 12rem minmax(0, 1fr);
+  gap: 0.85rem;
+}
+
+.automation-weekdays {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(2rem, 1fr));
+  gap: 0.35rem;
+}
+
+.automation-weekdays button {
+  height: 2.25rem;
+  border: 1px solid var(--border);
+  border-radius: 0.4rem;
+  background: var(--card);
+  color: var(--muted-foreground);
+  font-size: 0.6875rem;
+  font-weight: 600;
+}
+
+.automation-weekdays button:hover,
+.automation-weekdays button.is-selected {
+  background: var(--accent);
+  color: var(--foreground);
+}
+
+.automation-weekdays button.is-selected {
+  border-color: color-mix(in srgb, var(--primary) 48%, var(--border));
+}
+
+.automation-enabled-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.65rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  background: color-mix(in srgb, var(--card) 70%, transparent);
+}
+
+.automation-enabled-row > div {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.automation-enabled-row span {
+  color: var(--muted-foreground);
+  font-size: 0.75rem;
+}
+
+.automation-editor__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  padding-top: 0.25rem;
+}
+
+@media (max-width: 760px) {
+  .automation-form-grid--three,
+  .automation-form-grid--four,
+  .automation-schedule-row {
+    grid-template-columns: 1fr;
+  }
+
+  .automation-row {
+    grid-template-columns: 0.45rem minmax(0, 1fr);
+  }
+
+  .automation-row__actions {
+    grid-column: 2;
+    justify-content: flex-end;
+  }
 }
 
 .settings-v2__body--archive {

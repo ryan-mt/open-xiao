@@ -16,6 +16,10 @@ import { flushSync } from "react-dom";
 import { open } from "@tauri-apps/plugin-dialog";
 import { CircleCheck } from "lucide-react";
 import { requestConfirmDialog } from "./confirmDialog";
+import type {
+  AutomationDueEvent,
+  AutomationTask,
+} from "./automations";
 import {
   loadSidebarWidth,
   SidebarFloatingControls,
@@ -43,7 +47,6 @@ import { BootSplash } from "./components/BootSplash";
 import { AuthModal } from "./components/AuthModal";
 import { SignInProviderModal } from "./components/auth/SignInProviderModal";
 import { ProfilePage } from "./components/ProfilePage";
-import { UsagePage } from "./components/UsagePage";
 import {
   OpenCodeUpdateNotice,
   ProvidersPage,
@@ -197,6 +200,8 @@ import {
 import {
   configureAntigravityModels,
   configureOpenCodeModels,
+  ALL_MODELS,
+  availableModelCatalogs,
   providerOf,
   reconcileAvailableModelId,
   supportsFastMode,
@@ -302,6 +307,11 @@ import "./App.css";
 
 const FilePreviewPanel = lazy(() => import("./components/FilePreviewPanel"));
 const ProjectFilePicker = lazy(() => import("./components/ProjectFilePicker"));
+const UsagePage = lazy(() =>
+  import("./components/UsagePage").then((module) => ({
+    default: module.UsagePage,
+  })),
+);
 const SettingsModal = lazy(() =>
   import("./components/SettingsModal").then((module) => ({
     default: module.SettingsModal,
@@ -551,6 +561,10 @@ export default function App() {
     return m;
   });
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [automations, setAutomations] = useState<AutomationTask[]>([]);
+  const automationDueHandlerRef = useRef<
+    (event: AutomationDueEvent) => Promise<void>
+  >(async () => {});
   const [usageOpen, setUsageOpen] = useState(false);
   const [providersOpen, setProvidersOpen] = useState(false);
   const [antigravityEnabled, setAntigravityEnabled] = useState(
@@ -671,6 +685,29 @@ export default function App() {
 
   useEffect(() => installZoomHotkeys(), []);
   useEffect(() => installNotificationSoundUnlock(), []);
+  useEffect(() => {
+    let cancelled = false;
+    let unlisten: (() => void) | null = null;
+    void import("./automations")
+      .then(async ({ listAutomations, subscribeAutomationDue }) => {
+        const dispose = await subscribeAutomationDue((event) => {
+          void automationDueHandlerRef.current(event).catch((error) => {
+            toast.error(`Automation failed to start: ${String(error)}`);
+          });
+        });
+        if (cancelled) dispose();
+        else unlisten = dispose;
+        const tasks = await listAutomations();
+        if (!cancelled) setAutomations(tasks);
+      })
+      .catch((error) => {
+        if (!cancelled) toast.error(`Could not load automations: ${String(error)}`);
+      });
+    return () => {
+      cancelled = true;
+      unlisten?.();
+    };
+  }, [toast]);
 
   // Durable store: hydrate SQLite → memory, then re-sync React state.
   // Prevents empty/default chats overwriting real history on first paint.
@@ -1042,6 +1079,13 @@ export default function App() {
     }),
     [antigravityEnabled, openCodeEnabled, providerAvailability],
   );
+  const automationModels = useMemo(
+    () =>
+      availableModelCatalogs(modelSelectionAvailability).flatMap(
+        (catalog) => catalog.models,
+      ),
+    [modelSelectionAvailability],
+  );
   useEffect(() => {
     if (!authKnown || !openaiAuthKnown) return;
     if (activeLockedProvider) return;
@@ -1084,7 +1128,7 @@ export default function App() {
           activeWorkspacePath,
           modelId,
         )
-      : providerAvailability[activeModelProvider];
+      : providerAvailability[activeModelProvider] !== false;
 
   const activeStreamOverlay =
     activeId != null ? streamOverlayMap.get(activeId) : undefined;
@@ -1154,7 +1198,7 @@ export default function App() {
         return false;
       }
       if (target.provider !== "opencode") {
-        return providerAvailability[target.provider];
+        return providerAvailability[target.provider] !== false;
       }
       const project = findSendTargetProject(projectsRef.current, target);
       const workspacePath = resolveWorkspacePath(
@@ -3281,10 +3325,10 @@ export default function App() {
   const requestProviderLogin = (provider: ModelProvider) => {
     if (provider === "openai") {
       void handleOpenAILogin();
-    } else if (provider === "opencode" || provider === "antigravity") {
-      openProviders();
-    } else {
+    } else if (provider === "grok") {
       void handleLogin();
+    } else {
+      openProviders();
     }
   };
 
@@ -3299,6 +3343,10 @@ export default function App() {
     project: Project | null;
     /** When set, tools/git cwd is the worktree instead of project.path. */
     worktreePath?: string | null;
+    accessMode?: AccessMode;
+    permissionMode?: PermissionMode;
+    agentMode?: AgentMode;
+    thinking?: ThinkingLevel;
   }) => {
     const { convId, history, assistantId, project, worktreePath } = opts;
     setStreamErrorDismissals((current) =>
@@ -3309,8 +3357,18 @@ export default function App() {
       (thread) => thread.id === convId,
     );
     const streamModelId = threadModelId(streamThread) ?? modelId;
-    const streamThinking = thinkingForModel(streamModelId, thinking);
+    const streamThinking = thinkingForModel(
+      streamModelId,
+      opts.thinking ?? thinking,
+    );
     const streamProvider = providerOf(streamModelId);
+    const errorProvider =
+      streamProvider === "grok" ||
+      streamProvider === "openai" ||
+      streamProvider === "antigravity" ||
+      streamProvider === "opencode"
+        ? streamProvider
+        : undefined;
     const startedAt = Date.now();
     const prevGen = streamGenByThreadRef.current.get(convId) ?? 0;
     const gen = prevGen + 1;
@@ -3434,9 +3492,9 @@ export default function App() {
         thinking: streamThinking,
         fastMode: openaiFastMode && supportsFastMode(streamModelId),
         projectPath: workspacePath,
-        accessMode,
-        permissionMode,
-        agentMode,
+        accessMode: opts.accessMode ?? accessMode,
+        permissionMode: opts.permissionMode ?? permissionMode,
+        agentMode: opts.agentMode ?? agentMode,
         onChunk: batch.onChunk,
         onThinking: batch.onThinking,
         onToolStart: batch.onToolStart,
@@ -3467,7 +3525,7 @@ export default function App() {
       if (isLive()) {
         batch.flush();
         const error = normalizeUserFacingError(e, {
-          provider: streamProvider,
+          provider: errorProvider,
           fallbackMessage: "The model could not complete this reply.",
         });
         if (error.category === "cancellation" || ac.signal.aborted) {
@@ -3503,7 +3561,7 @@ export default function App() {
         // Stream returned Ok but produced nothing visible — surface why Working died.
         if (isEmptyAssistantTurn(assistantSnap)) {
           streamError = createUserFacingError("connectivity", {
-            provider: streamProvider,
+            provider: errorProvider,
           });
         } else {
           const hanging = (assistantSnap.parts ?? []).some(
@@ -3511,7 +3569,7 @@ export default function App() {
           );
           if (hanging) {
             streamError = createUserFacingError("connectivity", {
-              provider: streamProvider,
+              provider: errorProvider,
             });
             patchAssistant((m) =>
               finalizeRunningTools(m, "Stream ended before this tool finished"),
@@ -3618,12 +3676,17 @@ export default function App() {
       /** API-only body (e.g. interrupt steer). UI stores `text` instead. */
       apiText?: string;
       reviewCommentIds?: string[];
+      accessMode?: AccessMode;
+      permissionMode?: PermissionMode;
+      agentMode?: AgentMode;
+      thinking?: ThinkingLevel;
+      requestLogin?: boolean;
     },
   ) => {
     const clearComposer = opts?.clearComposer ?? true;
     const displayText = text;
     const apiText = opts?.apiText ?? text;
-    if (!displayText && !apiText && atts.length === 0) return;
+    if (!displayText && !apiText && atts.length === 0) return null;
 
     const targetId = opts?.threadId !== undefined ? opts.threadId : activeId;
     const target = resolveSendTarget(
@@ -3636,13 +3699,13 @@ export default function App() {
       if (targetId === activeId) {
         toast.error("This chat no longer has a valid model. Start a new chat.");
       }
-      return;
+      return null;
     }
     const projectForSend = findSendTargetProject(projects, target);
     const targetProviderAvailable = sendTargetAvailability(target);
     if (!targetProviderAvailable) {
-      requestProviderLogin(target.provider);
-      return;
+      if (opts?.requestLogin !== false) requestProviderLogin(target.provider);
+      return null;
     }
 
     // Block only if THIS thread is already streaming or mid-send (other chats can run in parallel).
@@ -3652,7 +3715,7 @@ export default function App() {
         sendingByThreadRef.current.has(targetId) ||
         worktreeDeleteBusyRef.current.has(targetId))
     ) {
-      return;
+      return null;
     }
 
     const existing = target.existing;
@@ -3758,9 +3821,102 @@ export default function App() {
         assistantId,
         project: projectForSend,
         worktreePath: existing?.worktreePath ?? null,
+        accessMode: opts?.accessMode,
+        permissionMode: opts?.permissionMode,
+        agentMode: opts?.agentMode,
+        thinking: opts?.thinking,
       });
     } finally {
       sendingByThreadRef.current.delete(convId);
+    }
+    return convId;
+  };
+
+  automationDueHandlerRef.current = async (event) => {
+    const { markAutomationRunning, recordAutomationRun } = await import("./automations");
+    setAutomations((current) => markAutomationRunning(current, event.taskId));
+    for (let attempt = 0; !storeReadyRef.current && attempt < 100; attempt += 1) {
+      await new Promise((resolve) => window.setTimeout(resolve, 100));
+    }
+    if (!storeReadyRef.current) {
+      const updated = await recordAutomationRun({
+        id: event.taskId,
+        succeeded: false,
+        error: "The local chat store did not become ready.",
+      });
+      setAutomations((current) =>
+        current.map((task) => (task.id === updated.id ? updated : task)),
+      );
+      return;
+    }
+    const project = projectsRef.current.find(
+      (candidate) => candidate.id === event.projectId,
+    );
+    if (!project) {
+      const updated = await recordAutomationRun({
+        id: event.taskId,
+        succeeded: false,
+        error: "The selected project no longer exists.",
+      });
+      setAutomations((current) =>
+        current.map((task) => (task.id === updated.id ? updated : task)),
+      );
+      return;
+    }
+
+    if (providerOf(event.modelId) === "opencode") {
+      const workspacePath = resolveWorkspacePath(project.path, null);
+      if (workspacePath) {
+        try {
+          await checkOpenCodeWorkspace(workspacePath);
+        } catch {
+          // The normal send availability check records a provider-facing failure below.
+        }
+      }
+    }
+
+    const thread = createThread(event.projectId, event.title, event.modelId);
+    setThreads((current) => [thread, ...current], { immediate: true });
+    persistThreadsNow();
+    let threadId: string | null = null;
+    let error: string | null = null;
+    try {
+      threadId = await handleSendPayload(event.prompt, [], {
+        clearComposer: false,
+        threadId: thread.id,
+        apiText: `[Scheduled automation: ${event.title}]\n\n${event.prompt}`,
+        accessMode: event.accessMode,
+        permissionMode: event.permissionMode,
+        agentMode: event.agentMode,
+        thinking: ALL_MODELS.find((model) => model.id === event.modelId)?.defaultThinking,
+        requestLogin: false,
+      });
+      if (!threadId) {
+        error = "The selected model provider is not available.";
+        setThreads(
+          (current) => current.filter((candidate) => candidate.id !== thread.id),
+          { immediate: true },
+        );
+        persistThreadsNow();
+      } else {
+        error = threadsRef.current.find((candidate) => candidate.id === threadId)
+          ?.lastError?.message ?? null;
+      }
+    } catch (cause) {
+      error = cause instanceof Error ? cause.message : String(cause);
+    }
+    try {
+      const updated = await recordAutomationRun({
+        id: event.taskId,
+        succeeded: threadId !== null && error === null,
+        error,
+        threadId,
+      });
+      setAutomations((current) =>
+        current.map((task) => (task.id === updated.id ? updated : task)),
+      );
+    } catch (cause) {
+      toast.error(`Could not record automation result: ${String(cause)}`);
     }
   };
 
@@ -5423,12 +5579,13 @@ export default function App() {
               onUnarchiveThread={handleUnarchive}
               onDeleteThread={handleDelete}
               onOpenThread={(id) => {
-                handleUnarchive(id, { silent: true });
-                handleSelectThread(id);
                 const t = threadsRef.current.find((x) => x.id === id);
+                const wasArchived = t?.archivedAt != null;
+                if (wasArchived) handleUnarchive(id, { silent: true });
+                handleSelectThread(id);
                 if (t) setActiveProjectId(t.projectId);
                 setSettingsOpen(false);
-                toast.success("Chat restored");
+                if (wasArchived) toast.success("Chat restored");
               }}
               onArchiveAll={() => void handleArchiveAll()}
               archiveAllBusy={archivingAll}
@@ -5438,13 +5595,20 @@ export default function App() {
               onUnimportCodexChats={() => void handleUnimportCodexChats()}
               unimportCodexChatsBusy={unimportingCodexChats}
               workingThreadIds={streamingThreadIds}
+              automations={automations}
+              automationModels={automationModels}
+              onAutomationsChange={setAutomations}
               onClose={() => setSettingsOpen(false)}
             />
           </Suspense>
         </SettingsLoadBoundary>
       ) : null}
 
-      <UsagePage open={usageOpen} onClose={closeUsage} />
+      {usageOpen ? (
+        <Suspense fallback={null}>
+          <UsagePage open onClose={closeUsage} />
+        </Suspense>
+      ) : null}
 
       <ProvidersPage
         open={providersOpen}

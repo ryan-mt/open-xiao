@@ -1,6 +1,6 @@
 [package]
 name = "open-xiao"
-version = "0.1.0"
+version = "0.1.1"
 description = "Open Xiao desktop app"
 authors = ["Open Xiao contributors"]
 edition = "2021"

@@ -1,5 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { CalendarClock } from "lucide-react";
 import type { AuthStatus, OpenAIAuthStatus } from "../auth";
+import {
+  deleteAutomation,
+  listAutomations,
+  runAutomationNow,
+  setAutomationEnabled,
+  upsertAutomation,
+  type AutomationTask,
+} from "../automations";
 import { APP_BASE_NAME, APP_ENVIRONMENT_LABEL } from "../branding";
 import {
   ensureNotifyPermission,
@@ -8,6 +17,7 @@ import {
   type NotifyPermissionState,
 } from "../desktopNotify";
 import { formatPlanLabel } from "../planLabel";
+import type { Model } from "../models";
 import { THEME_CATALOG, type ThemeMode } from "../theme";
 import { timeGroupLabel, type Project, type Thread } from "../types";
 import type { KeybindingRule } from "../keybindings";
@@ -17,6 +27,7 @@ import {
   AppearancePage,
 } from "./settings/AppearancePage";
 import { KeybindingsPage } from "./keybindings/KeybindingsPage";
+import { AutomationsPage } from "./settings/AutomationsPage";
 import {
   resolveEnvironmentIdentificationPillLabel,
   saveEnvironmentIdentificationMode,
@@ -24,7 +35,7 @@ import {
   type EnvironmentIdentificationMode,
 } from "./SidebarStageBackdrop";
 
-const APP_VERSION = "0.1.0";
+const APP_VERSION = "0.1.1";
 
 const ENV_ID_OPTIONS: {
   id: EnvironmentIdentificationMode;
@@ -70,10 +81,19 @@ export type SettingsModalProps = {
   unimportCodexChatsBusy?: boolean;
   /** Thread ids currently streaming — excluded from Archive all. */
   workingThreadIds?: string[];
+  automations?: AutomationTask[];
+  automationModels?: Model[];
+  onAutomationsChange?: (tasks: AutomationTask[]) => void;
   onClose: () => void;
 };
 
-type TabId = "general" | "account" | "archive" | "appearance" | "keybindings";
+type TabId =
+  | "general"
+  | "account"
+  | "automations"
+  | "archive"
+  | "appearance"
+  | "keybindings";
 
 export function SettingsModal({
   open,
@@ -109,6 +129,9 @@ export function SettingsModal({
   onUnimportCodexChats,
   unimportCodexChatsBusy = false,
   workingThreadIds = [],
+  automations = [],
+  automationModels = [],
+  onAutomationsChange,
   onClose,
 }: SettingsModalProps) {
   const [tab, setTab] = useState<TabId>("general");
@@ -316,6 +339,19 @@ export function SettingsModal({
 
               <div className="settings-v2__nav-section">
                 <div className="settings-v2__nav-label">Chats</div>
+                <button
+                  type="button"
+                  className={`settings-v2__nav-item${tab === "automations" ? " is-active" : ""}`}
+                  onClick={() => setTab("automations")}
+                >
+                  <CalendarClock size={14} />
+                  Automations
+                  {automations.length > 0 ? (
+                    <span className="settings-v2__nav-count">
+                      {automations.length}
+                    </span>
+                  ) : null}
+                </button>
                 <button
                   type="button"
                   className={`settings-v2__nav-item${tab === "archive" ? " is-active" : ""}`}
@@ -666,6 +702,29 @@ export function SettingsModal({
                   </section>
                 </div>
               </>
+            ) : tab === "automations" ? (
+              <AutomationsPage
+                tasks={automations}
+                projects={projects}
+                models={automationModels}
+                onSave={async (input) => {
+                  await upsertAutomation(input);
+                  onAutomationsChange?.(await listAutomations());
+                }}
+                onSetEnabled={async (id, enabled) => {
+                  await setAutomationEnabled(id, enabled);
+                  onAutomationsChange?.(await listAutomations());
+                }}
+                onDelete={async (id) => {
+                  await deleteAutomation(id);
+                  onAutomationsChange?.(await listAutomations());
+                }}
+                onRunNow={async (id) => {
+                  await runAutomationNow(id);
+                  onAutomationsChange?.(await listAutomations());
+                }}
+                onOpenThread={(id) => onOpenThread?.(id)}
+              />
             ) : tab === "appearance" ? (
               <AppearancePage
                 onThemeChange={onThemeChange}

@@ -76,9 +76,33 @@ pub fn open_db(app: &AppHandle) -> Result<Connection, String> {
             value TEXT NOT NULL,
             updated_at INTEGER NOT NULL
         );
+        CREATE TABLE IF NOT EXISTS automation_tasks (
+            id TEXT PRIMARY KEY NOT NULL,
+            title TEXT NOT NULL,
+            prompt TEXT NOT NULL,
+            enabled INTEGER NOT NULL,
+            schedule_json TEXT NOT NULL,
+            project_id TEXT NOT NULL,
+            model_id TEXT NOT NULL,
+            access_mode TEXT NOT NULL,
+            permission_mode TEXT NOT NULL,
+            agent_mode TEXT NOT NULL,
+            created_at INTEGER NOT NULL,
+            updated_at INTEGER NOT NULL,
+            next_run_at INTEGER,
+            last_run_at INTEGER,
+            last_run_status TEXT NOT NULL,
+            last_error TEXT,
+            last_thread_id TEXT,
+            run_count INTEGER NOT NULL DEFAULT 0
+        );
+        CREATE INDEX IF NOT EXISTS idx_automation_tasks_due
+            ON automation_tasks(enabled, next_run_at)
+            WHERE enabled = 1 AND next_run_at IS NOT NULL;
         ",
     )
     .map_err(|e| format!("migrate sqlite: {e}"))?;
+    crate::automation::recover_interrupted_runs(&conn)?;
     Ok(conn)
 }
 
