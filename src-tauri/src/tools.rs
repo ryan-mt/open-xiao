@@ -816,6 +816,7 @@ pub async fn execute_tool_with_depth(
         Ok(v) => v,
         Err(e) => return err_outcome(e),
     };
+    let stamp_scope = read_stamp_scope(capture);
 
     let result = match name {
         "read" => {
@@ -831,6 +832,7 @@ pub async fn execute_tool_with_depth(
                 json_i64(&args, &["offset"]),
                 json_i64(&args, &["limit"]),
                 full_access,
+                stamp_scope,
             );
             return match read {
                 Ok(out) => read_outcome(out),
@@ -847,7 +849,7 @@ pub async fn execute_tool_with_depth(
                 Some(c) => c,
                 None => return err_outcome("missing content".into()),
             };
-            write_file(&root, &path, &content, full_access, capture)
+            write_file(&root, &path, &content, full_access, capture, stamp_scope)
         }
         "edit" => {
             let path = match json_str_nonempty(&args, &["filePath", "path", "file_path"]) {
@@ -871,6 +873,7 @@ pub async fn execute_tool_with_depth(
                 json_bool(&args, &["replaceAll", "replace_all"]),
                 full_access,
                 capture,
+                stamp_scope,
             )
         }
         "patch" => {
@@ -878,7 +881,7 @@ pub async fn execute_tool_with_depth(
                 Some(p) => p,
                 None => return err_outcome("missing patch".into()),
             };
-            apply_patch(&root, &patch, full_access, capture)
+            apply_patch(&root, &patch, full_access, capture, stamp_scope)
         }
         "glob" => {
             let pattern = match json_str_nonempty(&args, &["pattern"]) {
@@ -1069,7 +1072,7 @@ pub async fn execute_tool_with_depth(
                 Some(p) => p,
                 None => return err_outcome("missing filePath".into()),
             };
-            delete_file(&root, &path, full_access, capture)
+            delete_file(&root, &path, full_access, capture, stamp_scope)
         }
         other => Err(format!(
             "Unknown tool: {other}. Available tools: read, write, edit, patch, delete, bash, glob, grep, webfetch, websearch, question, todowrite, task, and registered application tools"
@@ -1354,15 +1357,15 @@ fn resolve_under_root(root: &Path, rel_in: &str) -> Result<PathBuf, String> {
 
 /// Read-freshness stamps: edit/write/patch refuse to mutate a file that was
 /// never read, or that changed on disk since the last read (Claude Code-style
-/// stale-read protection). Keyed by canonical absolute path.
+/// stale-read protection). Keyed by owning stream and canonical absolute path.
 #[derive(Clone, Copy, PartialEq)]
 struct FileStamp {
     mtime_ms: u64,
     len: u64,
 }
 
-fn stamp_map() -> &'static Mutex<HashMap<PathBuf, FileStamp>> {
-    static STAMPS: OnceLock<Mutex<HashMap<PathBuf, FileStamp>>> = OnceLock::new();
+fn stamp_map() -> &'static Mutex<HashMap<(String, PathBuf), FileStamp>> {
+    static STAMPS: OnceLock<Mutex<HashMap<(String, PathBuf), FileStamp>>> = OnceLock::new();
     STAMPS.get_or_init(|| Mutex::new(HashMap::new()))
 }
 
@@ -1385,7 +1388,14 @@ fn stamp_key(path: &Path) -> PathBuf {
 }
 
 /// Record that the agent has seen the current contents of `path`.
-fn record_read_stamp(path: &Path) {
+fn read_stamp_scope(capture: Option<MutationCapture<'_>>) -> &str {
+    capture
+        .map(|value| value.stream_id.trim())
+        .filter(|value| !value.is_empty())
+        .unwrap_or("direct-tool")
+}
+
+fn record_read_stamp(scope: &str, path: &Path) {
     let Some(stamp) = current_stamp(path) else {
         return;
     };
@@ -1395,21 +1405,24 @@ fn record_read_stamp(path: &Path) {
     if map.len() > 20_000 {
         map.clear();
     }
-    map.insert(key, stamp);
+    map.insert((scope.to_string(), key), stamp);
 }
 
-fn drop_read_stamp(path: &Path) {
+fn drop_read_stamp(scope: &str, path: &Path) {
     let key = stamp_key(path);
-    stamp_map().lock().expect("stamp map").remove(&key);
+    stamp_map()
+        .lock()
+        .expect("stamp map")
+        .remove(&(scope.to_string(), key));
 }
 
 /// Gate a mutation on a fresh read of `path` (which must exist).
-fn require_fresh_read(path: &Path, display: &str) -> Result<(), String> {
+fn require_fresh_read(scope: &str, path: &Path, display: &str) -> Result<(), String> {
     let Some(cur) = current_stamp(path) else {
         return Ok(());
     };
     let map = stamp_map().lock().expect("stamp map");
-    match map.get(&stamp_key(path)) {
+    match map.get(&(scope.to_string(), stamp_key(path))) {
         None => Err(format!(
             "{display} has not been read yet. Read the file first, then retry the change."
         )),
@@ -1447,6 +1460,7 @@ fn read_path(
     offset: Option<i64>,
     limit: Option<i64>,
     full_access: bool,
+    stamp_scope: &str,
 ) -> Result<ReadOut, String> {
     let path = resolve_existing_path(root, rel, full_access)?;
     let label = display_path_label(root, &path, rel);
@@ -1462,13 +1476,13 @@ fn read_path(
         .map(|e| e.to_ascii_lowercase())
         .unwrap_or_default();
     if IMAGE_EXTS.contains(&ext.as_str()) {
-        return read_image_payload(&path, &label);
+        return read_image_payload(&path, &label, stamp_scope);
     }
     if ext == "pdf" {
-        return read_pdf_text(&path, &label);
+        return read_pdf_text(&path, &label, stamp_scope);
     }
     if ext == "ipynb" {
-        return read_notebook(&path, &label);
+        return read_notebook(&path, &label, stamp_scope);
     }
     let meta = fs::metadata(&path).map_err(|e| e.to_string())?;
     // Cap before loading so multi-GB files cannot OOM the host process.
@@ -1521,7 +1535,7 @@ fn read_path(
         ));
     }
     // Stale-read protection: any successful read refreshes the file's stamp.
-    record_read_stamp(&path);
+    record_read_stamp(stamp_scope, &path);
     Ok(ReadOut::Text(out))
 }
 
@@ -1546,7 +1560,7 @@ fn image_mime_from_bytes(data: &[u8]) -> Option<&'static str> {
     None
 }
 
-fn read_image_payload(path: &Path, label: &str) -> Result<ReadOut, String> {
+fn read_image_payload(path: &Path, label: &str, stamp_scope: &str) -> Result<ReadOut, String> {
     let meta = fs::metadata(path).map_err(|e| e.to_string())?;
     if meta.len() > MAX_IMAGE_READ_BYTES {
         return Err(format!(
@@ -1562,7 +1576,7 @@ fn read_image_payload(path: &Path, label: &str) -> Result<ReadOut, String> {
     };
     let b64 = base64::engine::general_purpose::STANDARD.encode(&data);
     let data_url = format!("data:{mime};base64,{b64}");
-    record_read_stamp(path);
+    record_read_stamp(stamp_scope, path);
     Ok(ReadOut::Image {
         image: ToolImage {
             data_url,
@@ -1576,7 +1590,7 @@ fn read_image_payload(path: &Path, label: &str) -> Result<ReadOut, String> {
     })
 }
 
-fn read_pdf_text(path: &Path, label: &str) -> Result<ReadOut, String> {
+fn read_pdf_text(path: &Path, label: &str, stamp_scope: &str) -> Result<ReadOut, String> {
     let meta = fs::metadata(path).map_err(|e| e.to_string())?;
     if meta.len() > MAX_PDF_READ_BYTES {
         return Err(format!(
@@ -1593,7 +1607,7 @@ fn read_pdf_text(path: &Path, label: &str) -> Result<ReadOut, String> {
             "No extractable text in {label} (scanned/image-only PDFs are not supported)."
         ));
     }
-    record_read_stamp(path);
+    record_read_stamp(stamp_scope, path);
     Ok(ReadOut::Text(format!(
         "PDF: {label}\n\n{}",
         truncate(body, MAX_RESULT_CHARS)
@@ -1640,7 +1654,7 @@ fn notebook_output_text(output: &Value) -> String {
     String::new()
 }
 
-fn read_notebook(path: &Path, label: &str) -> Result<ReadOut, String> {
+fn read_notebook(path: &Path, label: &str, stamp_scope: &str) -> Result<ReadOut, String> {
     let meta = fs::metadata(path).map_err(|e| e.to_string())?;
     if meta.len() > MAX_MUTATION_FILE_BYTES {
         return Err(format!(
@@ -1697,7 +1711,7 @@ fn read_notebook(path: &Path, label: &str) -> Result<ReadOut, String> {
             }
         }
     }
-    record_read_stamp(path);
+    record_read_stamp(stamp_scope, path);
     Ok(ReadOut::Text(out))
 }
 
@@ -2594,6 +2608,7 @@ fn edit_file(
     replace_all: bool,
     full_access: bool,
     capture: Option<MutationCapture<'_>>,
+    stamp_scope: &str,
 ) -> Result<String, String> {
     if old_string.is_empty() {
         return Err("oldString must not be empty".into());
@@ -2620,7 +2635,7 @@ fn edit_file(
     let display_rel = display_path_label(root, &path, rel);
     // Stale-read protection: reject blind edits and edits based on outdated
     // content before loading the file.
-    require_fresh_read(&path, &display_rel)?;
+    require_fresh_read(stamp_scope, &path, &display_rel)?;
     target.verify_path(&path)?;
     let original = target.read_to_string()?;
     // Normalize CRLF for matching, then restore the file ending.
@@ -2690,7 +2705,7 @@ fn edit_file(
     target.write(next.as_bytes(), false)?;
     target.verify_path(&path)?;
     drop(evidence_guard);
-    record_read_stamp(&path);
+    record_read_stamp(stamp_scope, &path);
     let (additions, deletions) = line_change_stats(&original, &next);
     let mut diff = unified_diff_snippet(&original, &next, 240);
     // Guarantee the UI always has something expandable even if LCS skip was too aggressive.
@@ -2729,6 +2744,7 @@ fn write_file(
     content: &str,
     full_access: bool,
     capture: Option<MutationCapture<'_>>,
+    stamp_scope: &str,
 ) -> Result<String, String> {
     if content.chars().count() > MAX_WRITE_CHARS {
         return Err("content too large".into());
@@ -2745,7 +2761,7 @@ fn write_file(
     // Overwriting an existing file requires a fresh read (creating new ones
     // never does).
     if path.is_file() {
-        require_fresh_read(&path, &display_rel)?;
+        require_fresh_read(stamp_scope, &path, &display_rel)?;
         target.verify_path(&path)?;
     }
     if let Some(cap) = capture {
@@ -2774,7 +2790,7 @@ fn write_file(
     target.write(content.as_bytes(), !existed)?;
     target.verify_path(&path)?;
     drop(evidence_guard);
-    record_read_stamp(&path);
+    record_read_stamp(stamp_scope, &path);
     let (additions, deletions) = if !existed {
         let lines = content.replace("\r\n", "\n").split('\n').count();
         (lines, 0)
@@ -2828,6 +2844,7 @@ fn delete_file(
     rel: &str,
     full_access: bool,
     capture: Option<MutationCapture<'_>>,
+    stamp_scope: &str,
 ) -> Result<String, String> {
     let mutation_fs = MutationFs::new(root, full_access)?;
     let path = resolve_existing_path(root, rel, full_access)?;
@@ -2837,7 +2854,7 @@ fn delete_file(
     let mut target = mutation_fs.delete_target(&path)?;
     target.verify_path(&path)?;
     let label = display_path_label(root, &path, rel);
-    require_fresh_read(&path, &label)?;
+    require_fresh_read(stamp_scope, &path, &label)?;
     target.verify_path(&path)?;
     if let Some(cap) = capture {
         cap.snapshots.capture_before_delete(
@@ -2853,7 +2870,7 @@ fn delete_file(
     target.remove_file()?;
     target.verify_path(&path)?;
     // A recreated file at this path must not inherit the old read stamp.
-    drop_read_stamp(&path);
+    drop_read_stamp(stamp_scope, &path);
     if let Some(cap) = capture {
         cap.snapshots.mark_written(cap.stream_id, cap.tool_id);
     }
@@ -3090,6 +3107,7 @@ fn apply_patch(
     patch: &str,
     full_access: bool,
     capture: Option<MutationCapture<'_>>,
+    stamp_scope: &str,
 ) -> Result<String, String> {
     let mutation_fs = MutationFs::new(root, full_access)?;
     let files = parse_patch(patch)?;
@@ -3167,7 +3185,7 @@ fn apply_patch(
                         ));
                     }
                 }
-                require_fresh_read(&path, &display_rel)?;
+                require_fresh_read(stamp_scope, &path, &display_rel)?;
                 target.verify_path(&path)?;
                 let original = target.read_to_string()?;
                 let crlf = original.contains("\r\n");
@@ -3205,7 +3223,7 @@ fn apply_patch(
                 let target = mutation_fs.delete_target(&path)?;
                 target.verify_path(&path)?;
                 let display_rel = display_path_label(root, &path, rel);
-                require_fresh_read(&path, &display_rel)?;
+                require_fresh_read(stamp_scope, &path, &display_rel)?;
                 target.verify_path(&path)?;
                 planned.push(Planned::Delete {
                     path,
@@ -3242,7 +3260,7 @@ fn apply_patch(
                 target.verify_path(path)?;
                 target.write(content.as_bytes(), true)?;
                 target.verify_path(path)?;
-                record_read_stamp(path);
+                record_read_stamp(stamp_scope, path);
                 let adds = content.replace("\r\n", "\n").split('\n').count();
                 total_adds += adds;
                 let mut preview: Vec<String> =
@@ -3273,7 +3291,7 @@ fn apply_patch(
                 target.verify_path(path)?;
                 target.write(next.as_bytes(), false)?;
                 target.verify_path(path)?;
-                record_read_stamp(path);
+                record_read_stamp(stamp_scope, path);
                 let (adds, dels) = line_change_stats(original, next);
                 total_adds += adds;
                 total_dels += dels;
@@ -3294,7 +3312,7 @@ fn apply_patch(
                 target.verify_path(path)?;
                 target.remove_file()?;
                 target.verify_path(path)?;
-                drop_read_stamp(path);
+                drop_read_stamp(stamp_scope, path);
                 total_dels += 1;
                 report_lines.push(format!("Deleted {rel}"));
             }
@@ -4786,7 +4804,7 @@ mod tool_tests {
             .join("\n");
         fs::write(&path, content).unwrap();
 
-        let out = super::read_path(&root, "large.txt", Some(1), Some(300), false).unwrap();
+        let out = super::read_path(&root, "large.txt", Some(1), Some(300), false, "test").unwrap();
         let super::ReadOut::Text(text) = out else {
             panic!("expected text read");
         };
@@ -4997,7 +5015,7 @@ mod tool_tests {
         fs::write(&path, "current").unwrap();
         // Stale-read gate: the edit below must pass the fresh-read check so it
         // fails on the match, not on the read requirement.
-        super::read_path(&root, "failed.txt", None, None, false).unwrap();
+        super::read_path(&root, "failed.txt", None, None, false, "s1").unwrap();
         let snapshots = SnapshotState::new();
         let result = edit_file(
             &root,
@@ -5013,6 +5031,7 @@ mod tool_tests {
                 workspace_root: &root,
                 full_access: false,
             }),
+            "s1",
         );
         assert!(result.is_err());
         assert!(snapshots.list_for_stream("s1").is_empty());
@@ -5609,6 +5628,45 @@ mod tool_tests {
     }
 
     #[tokio::test]
+    async fn fresh_reads_are_scoped_to_the_owning_stream() {
+        let root = temp_project();
+        fs::write(root.join("owned.txt"), "one\n").unwrap();
+        let snapshots = SnapshotState::new();
+
+        let (ok, msg) = run_tool_for_stream(
+            &root,
+            "read",
+            r#"{"filePath":"owned.txt"}"#,
+            "stream-a",
+            &snapshots,
+        )
+        .await;
+        assert!(ok, "{msg}");
+
+        let (ok, msg) = run_tool_for_stream(
+            &root,
+            "edit",
+            r#"{"filePath":"owned.txt","oldString":"one","newString":"two"}"#,
+            "stream-b",
+            &snapshots,
+        )
+        .await;
+        assert!(!ok);
+        assert!(msg.contains("not been read"), "{msg}");
+
+        let (ok, msg) = run_tool_for_stream(
+            &root,
+            "edit",
+            r#"{"filePath":"owned.txt","oldString":"one","newString":"two"}"#,
+            "stream-a",
+            &snapshots,
+        )
+        .await;
+        assert!(ok, "{msg}");
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[tokio::test]
     async fn delete_requires_a_fresh_read() {
         let root = temp_project();
         fs::write(root.join("delete.txt"), "keep until read").unwrap();
@@ -6037,10 +6095,17 @@ mod tool_tests {
     async fn apply_patch_rejects_aliases_for_the_same_file_before_writing() {
         let root = temp_project();
         fs::write(root.join("same.txt"), "alpha\n").unwrap();
-        let (ok, message) = run_tool(&root, "read", r#"{"filePath":"same.txt"}"#, false).await;
+        let snapshots = SnapshotState::new();
+        let (ok, message) = run_tool_for_stream(
+            &root,
+            "read",
+            r#"{"filePath":"same.txt"}"#,
+            "s1",
+            &snapshots,
+        )
+        .await;
         assert!(ok, "{message}");
 
-        let snapshots = SnapshotState::new();
         let patch = "*** Begin Patch\n\
                      *** Update File: same.txt\n\
                      @@\n\
