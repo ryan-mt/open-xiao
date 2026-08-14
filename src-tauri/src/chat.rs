@@ -1889,8 +1889,8 @@ pub async fn chat_stream(
         .as_deref()
         .map(|s| s.eq_ignore_ascii_case("full"))
         .unwrap_or(false);
-    let permission = PermissionMode::parse(permission_mode.as_deref());
-    let agent = AgentMode::parse(agent_mode.as_deref());
+    let permission = PermissionMode::parse(permission_mode.as_deref())?;
+    let agent = AgentMode::parse(agent_mode.as_deref())?;
 
     let ctrl = Arc::clone(ctrl.inner());
     let (live, my_gen) = ctrl.begin(&stream_id, &request_id);

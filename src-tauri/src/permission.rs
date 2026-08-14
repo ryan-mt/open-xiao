@@ -11,10 +11,11 @@ pub enum PermissionMode {
 }
 
 impl PermissionMode {
-    pub fn parse(raw: Option<&str>) -> Self {
+    pub fn parse(raw: Option<&str>) -> Result<Self, String> {
         match raw.map(|s| s.trim().to_ascii_lowercase()).as_deref() {
-            Some("ask") | Some("supervised") | Some("manual") => Self::Ask,
-            _ => Self::Auto,
+            Some("ask") | Some("supervised") | Some("manual") => Ok(Self::Ask),
+            Some("auto") | None => Ok(Self::Auto),
+            Some(_) => Err("Unsupported permission mode".into()),
         }
     }
 }
@@ -27,10 +28,13 @@ pub enum AgentMode {
 }
 
 impl AgentMode {
-    pub fn parse(raw: Option<&str>) -> Self {
+    pub fn parse(raw: Option<&str>) -> Result<Self, String> {
         match raw.map(|s| s.trim().to_ascii_lowercase()).as_deref() {
-            Some("plan") | Some("planning") | Some("read_only") | Some("readonly") => Self::Plan,
-            _ => Self::Build,
+            Some("plan") | Some("planning") | Some("read_only") | Some("readonly") => {
+                Ok(Self::Plan)
+            }
+            Some("build") | None => Ok(Self::Build),
+            Some(_) => Err("Unsupported agent mode".into()),
         }
     }
 
@@ -148,11 +152,19 @@ mod tests {
 
     #[test]
     fn parses_modes() {
-        assert_eq!(PermissionMode::parse(Some("ask")), PermissionMode::Ask);
-        assert_eq!(PermissionMode::parse(Some("AUTO")), PermissionMode::Auto);
-        assert_eq!(PermissionMode::parse(None), PermissionMode::Auto);
-        assert_eq!(AgentMode::parse(Some("plan")), AgentMode::Plan);
-        assert_eq!(AgentMode::parse(Some("build")), AgentMode::Build);
+        assert_eq!(
+            PermissionMode::parse(Some("ask")).unwrap(),
+            PermissionMode::Ask
+        );
+        assert_eq!(
+            PermissionMode::parse(Some("AUTO")).unwrap(),
+            PermissionMode::Auto
+        );
+        assert_eq!(PermissionMode::parse(None).unwrap(), PermissionMode::Auto);
+        assert_eq!(AgentMode::parse(Some("plan")).unwrap(), AgentMode::Plan);
+        assert_eq!(AgentMode::parse(Some("build")).unwrap(), AgentMode::Build);
+        assert!(PermissionMode::parse(Some("future-mode")).is_err());
+        assert!(AgentMode::parse(Some("future-mode")).is_err());
     }
 
     #[test]
