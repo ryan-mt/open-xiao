@@ -18,7 +18,7 @@ export function ProjectFilePicker({
   onClose,
 }: Props) {
   const [query, setQuery] = useState("");
-  const [entries, setEntries] = useState<ProjectSearchEntry[]>([]);
+  const [entries, setEntries] = useState<ProjectSearchEntry[] | null>([]);
   const [loading, setLoading] = useState(false);
   const [index, setIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -34,21 +34,32 @@ export function ProjectFilePicker({
   }, [open, projectPath]);
 
   useEffect(() => {
-    if (!open || !projectPath) return;
     const request = ++requestRef.current;
+    if (!open || !projectPath) {
+      setLoading(false);
+      return;
+    }
     setLoading(true);
+    setEntries((current) => current ?? []);
     const timer = window.setTimeout(() => {
-      void searchProjectEntries(projectPath, query, 80).then((next) => {
-        if (request !== requestRef.current) return;
-        setEntries(next.filter((entry) => !entry.isDir));
-        setLoading(false);
-        setIndex(0);
-      });
+      void searchProjectEntries(projectPath, query, 80)
+        .then((next) => {
+          if (request !== requestRef.current) return;
+          setEntries(next.filter((entry) => !entry.isDir));
+          setIndex(0);
+        })
+        .catch(() => {
+          if (request !== requestRef.current) return;
+          setEntries(null);
+        })
+        .finally(() => {
+          if (request === requestRef.current) setLoading(false);
+        });
     }, 90);
     return () => window.clearTimeout(timer);
   }, [open, projectPath, query]);
 
-  const files = useMemo(() => entries.slice(0, 60), [entries]);
+  const files = useMemo(() => entries?.slice(0, 60) ?? [], [entries]);
 
   useEffect(() => {
     if (!open) return;
@@ -100,6 +111,8 @@ export function ProjectFilePicker({
           {projectName ? <div className="cmdk__group">{projectName}</div> : null}
           {!projectPath ? (
             <div className="cmdk__empty">Open a project chat to search its files.</div>
+          ) : entries === null ? (
+            <div className="cmdk__empty">File search failed.</div>
           ) : loading && files.length === 0 ? (
             <div className="cmdk__empty">Searching files...</div>
           ) : files.length === 0 ? (
@@ -136,3 +149,5 @@ export function ProjectFilePicker({
     </div>
   );
 }
+
+export default ProjectFilePicker;

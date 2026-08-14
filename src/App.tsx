@@ -57,7 +57,6 @@ import {
   type CommandPaletteView,
   type PaletteAction,
 } from "./components/CommandPalette";
-import { ProjectFilePicker } from "./components/ProjectFilePicker";
 import type { SlashCommandHandlers } from "./slashCommands";
 import {
   getProfile,
@@ -156,8 +155,8 @@ import { resolveThreadAttentionById } from "./threadAttention";
 import {
   filterToolIdsWithSnapshots,
   mutationToolIdsForUndo,
-  toolIdsFromReviewFiles,
 } from "./snapshotUndo";
+import { useReviewUndoAvailability } from "./review/useReviewUndoAvailability";
 import { ReviewChangesPanel } from "./components/ReviewChangesPanel";
 import { TerminalPanel } from "./components/TerminalPanel";
 import { OpenInControls } from "./components/OpenInControls";
@@ -302,6 +301,7 @@ import {
 import "./App.css";
 
 const FilePreviewPanel = lazy(() => import("./components/FilePreviewPanel"));
+const ProjectFilePicker = lazy(() => import("./components/ProjectFilePicker"));
 const SettingsModal = lazy(() =>
   import("./components/SettingsModal").then((module) => ({
     default: module.SettingsModal,
@@ -494,7 +494,6 @@ export default function App() {
   const [undoBusy, setUndoBusy] = useState(false);
   /** Bumped after snapshot restore so canUndo re-lists. */
   const [snapshotEpoch, setSnapshotEpoch] = useState(0);
-  const [canUndoReview, setCanUndoReview] = useState(false);
   const [collapseThinking, setCollapseThinking] = useState(
     () => initialPrefs.collapseThinking,
   );
@@ -1545,47 +1544,15 @@ export default function App() {
     if (changed) persistThreadsNow();
   }, [attentionByThreadId, persistThreadsNow, setThreads]);
 
-  // Whether Review undo is available for the current turn/session scope.
-  useEffect(() => {
-    let cancelled = false;
-    const run = async () => {
-      if (
-        !reviewOpen ||
-        activeStreaming ||
-        !activeId ||
-        reviewScope === "git"
-      ) {
-        if (!cancelled) setCanUndoReview(false);
-        return;
-      }
-      const candidates =
-        reviewScope === "session"
-          ? mutationToolIdsForUndo(activeMessages, "session")
-          : toolIdsFromReviewFiles(chatReviewFiles).length > 0
-            ? toolIdsFromReviewFiles(chatReviewFiles)
-            : mutationToolIdsForUndo(activeMessages, "turn");
-      if (candidates.length === 0) {
-        if (!cancelled) setCanUndoReview(false);
-        return;
-      }
-      const snaps = await listSnapshots(activeId);
-      if (cancelled) return;
-      const usable = filterToolIdsWithSnapshots(candidates, snaps);
-      setCanUndoReview(usable.length > 0);
-    };
-    void run();
-    return () => {
-      cancelled = true;
-    };
-  }, [
+  const canUndoReview = useReviewUndoAvailability({
     activeId,
     activeMessages,
+    activeStreaming,
     chatReviewFiles,
     reviewOpen,
     reviewScope,
     snapshotEpoch,
-    activeStreaming,
-  ]);
+  });
 
   // Pill after stream finishes: prefer live tool edits, else turn summary
   // (header-accurate +N/-N), then working-tree stats when idle.
@@ -5551,18 +5518,20 @@ export default function App() {
         onBack={() => setPaletteView("root")}
         onClose={() => setPaletteOpen(false)}
       />
-      <ProjectFilePicker
-        open={filePickerOpen}
-        projectName={activeProject?.name ?? null}
-        projectPath={activeWorkspacePath ?? activeProject?.path ?? null}
-        onPick={(entry) => {
-          setDraft((current) => {
-            const spacer = current && !/\s$/.test(current) ? " " : "";
-            return `${current}${spacer}@${entry.path} `;
-          });
-        }}
-        onClose={() => setFilePickerOpen(false)}
-      />
+      <Suspense fallback={null}>
+        <ProjectFilePicker
+          open={filePickerOpen}
+          projectName={activeProject?.name ?? null}
+          projectPath={activeWorkspacePath ?? activeProject?.path ?? null}
+          onPick={(entry) => {
+            setDraft((current) => {
+              const spacer = current && !/\s$/.test(current) ? " " : "";
+              return `${current}${spacer}@${entry.path} `;
+            });
+          }}
+          onClose={() => setFilePickerOpen(false)}
+        />
+      </Suspense>
       <ConfirmDialogHost />
     </div>
   );
